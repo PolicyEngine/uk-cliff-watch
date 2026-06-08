@@ -49,6 +49,10 @@ class HouseholdMemberInput:
     age: int
     kind: str  # "adult" | "child"
     is_disabled: bool = False
+    is_blind: bool = False
+    is_severely_disabled: bool = False  # UI "Needs care"
+    is_full_time_student: bool = False  # carried for parity; no UK PE input
+    is_pregnant: bool = False  # carried for parity; no UK PE input
 
 
 @dataclass(frozen=True)
@@ -140,6 +144,10 @@ def _resolved_people(payload: HouseholdInput) -> list[dict[str, Any]]:
                 "kind": member.kind,
                 "age": int(member.age),
                 "is_disabled": bool(member.is_disabled),
+                "is_blind": bool(member.is_blind),
+                "is_severely_disabled": bool(member.is_severely_disabled),
+                "is_full_time_student": bool(member.is_full_time_student),
+                "is_pregnant": bool(member.is_pregnant),
             }
         )
     return people
@@ -207,6 +215,13 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
         person_data: dict[str, Any] = {
             "age": {year: person["age"]},
         }
+        # Map UI person flags to real policyengine-uk inputs where they exist.
+        if person.get("is_disabled"):
+            person_data["is_disabled_for_benefits"] = {year: True}
+        if person.get("is_blind"):
+            person_data["is_blind"] = {year: True}
+        if person.get("is_severely_disabled"):
+            person_data["is_severely_disabled_for_benefits"] = {year: True}
         if index == 0:
             # Primary earner: either a fixed value or the axis sweep.
             if not vary_income:
@@ -610,6 +625,10 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
             age=int(person["age"]),
             kind=str(person.get("kind") or ("child" if int(person["age"]) < 18 else "adult")),
             is_disabled=bool(person.get("is_disabled", False)),
+            is_blind=bool(person.get("is_blind", False)),
+            is_severely_disabled=bool(person.get("is_incapable_of_self_care", person.get("is_severely_disabled", False))),
+            is_full_time_student=bool(person.get("is_full_time_student", False)),
+            is_pregnant=bool(person.get("is_pregnant", False)),
         )
         for person in data.get("people", [])
     )

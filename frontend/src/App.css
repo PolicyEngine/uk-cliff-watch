@@ -2334,3 +2334,23 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* UK quick-start scenario chips (sit above the wizard progress) */
+.wizard-quickstart {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 1rem;
+}
+.wizard-quickstart-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-right: 0.25rem;
+}
+.wizard-quickstart-chip {
+  font-size: 0.8rem;
+}

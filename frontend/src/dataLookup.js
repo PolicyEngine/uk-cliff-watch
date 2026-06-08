@@ -116,6 +116,11 @@ export function normalizePeople(people = [], metadata) {
     return [{
       kind,
       age: normalizeAge(person?.age, kind === 'adult' ? MIN_ADULT_AGE : 0),
+      is_disabled: Boolean(person?.is_disabled),
+      is_blind: Boolean(person?.is_blind),
+      is_full_time_student: Boolean(person?.is_full_time_student),
+      is_incapable_of_self_care: Boolean(person?.is_incapable_of_self_care),
+      is_pregnant: Boolean(person?.is_pregnant),
     }]
   })
 }

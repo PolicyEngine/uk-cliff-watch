@@ -14,12 +14,38 @@ const clampAdultAge = (age) => {
 }
 
 const WIZARD_STEPS = [
-  { id: 'location', label: 'Region' },
+  { id: 'location', label: 'Location' },
   { id: 'household', label: 'Household' },
   { id: 'adults', label: 'Adults' },
-  { id: 'dependents', label: 'Children' },
+  { id: 'dependents', label: 'Dependents' },
   { id: 'review', label: 'Review' },
 ]
+
+// Person flags. Disabled/Blind/Needs care map to real policyengine-uk inputs;
+// Student is carried for parity with limited modelling.
+const PERSON_FLAGS = [
+  { key: 'is_disabled', label: 'Disabled' },
+  { key: 'is_blind', label: 'Blind' },
+  { key: 'is_full_time_student', label: 'Student' },
+  { key: 'is_incapable_of_self_care', label: 'Needs care' },
+]
+
+function PersonFlagGrid({ person, updatePerson }) {
+  return (
+    <div className="person-flag-grid">
+      {PERSON_FLAGS.map((flag) => (
+        <label key={flag.key} className="member-checkbox-label member-checkbox-label--compact">
+          <input
+            type="checkbox"
+            checked={Boolean(person[flag.key])}
+            onChange={(event) => updatePerson({ [flag.key]: event.target.checked })}
+          />
+          <span>{flag.label}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
 
 function InfoTooltip({ text }) {
   return (
@@ -116,6 +142,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
     )))
   }
 
+  const updatePerson = (index, partial) => {
+    setPeople(people.map((person, position) => (
+      position === index ? { ...person, ...partial } : person
+    )))
+  }
+
   const chooseHousehold = (couple) => {
     const adults = people.filter((person) => person.kind === 'adult')
     const children = people.filter((person) => person.kind === 'child')
@@ -207,6 +239,22 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
   return (
     <section className="input-panel">
       <h2>Household information</h2>
+      {presets.length ? (
+        <div className="wizard-quickstart">
+          <span className="wizard-quickstart-label">Quick start</span>
+          {presets.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className="member-add-btn wizard-quickstart-chip"
+              onClick={() => applyPreset(preset)}
+              title={preset.description}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <WizardProgress
         totalSteps={WIZARD_STEPS.length}
         currentStepIndex={currentStepIndex}
@@ -229,21 +277,8 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
           <section className="wizard-step">
             <div className="wizard-step-heading">
               <h3>Where does the household live?</h3>
-              <p>Choose a UK region, or load a ready-made scenario.</p>
+              <p>Select the UK region. Devolved taxes and local housing costs vary by region.</p>
             </div>
-            {presets.length ? (
-              <div className="wizard-option-grid">
-                {presets.map((preset) => (
-                  <WizardOptionCard
-                    key={preset.id}
-                    selected={false}
-                    title={preset.label}
-                    description={preset.tagline || preset.description}
-                    onClick={() => applyPreset(preset)}
-                  />
-                ))}
-              </div>
-            ) : null}
             <div className="form-grid form-grid--single">
               <div className="form-group">
                 <label htmlFor="region">Region</label>
@@ -346,6 +381,21 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                         />
                       </label>
                     </div>
+
+                    <div className="person-option-grid">
+                      <label className="member-checkbox-label member-checkbox-label--compact">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(person.is_pregnant)}
+                          onChange={(event) => updatePerson(index, { is_pregnant: event.target.checked })}
+                        />
+                        <span>Pregnant</span>
+                      </label>
+                      <PersonFlagGrid
+                        person={person}
+                        updatePerson={(partial) => updatePerson(index, partial)}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -356,21 +406,21 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
         {currentStepId === 'dependents' ? (
           <section className="wizard-step member-section">
             <div className="wizard-step-heading">
-              <h3>Any children?</h3>
-              <p>Add children whose benefits and tax credits should be included.</p>
+              <h3>Any dependents?</h3>
+              <p>Add children or other dependents whose benefits and tax credits should be included.</p>
             </div>
             {dependentMembers.length === 0 ? (
               <div className="wizard-option-grid">
                 <WizardOptionCard
                   selected={false}
-                  title="No children"
+                  title="No dependents"
                   description="Continue with adults only."
                   onClick={chooseNoDependents}
                 />
                 <WizardOptionCard
                   selected={false}
-                  title="Add a child"
-                  description="Start with a blank age; child ages drive Child Benefit, childcare and Universal Credit elements."
+                  title="Add a dependent"
+                  description="Start with a blank age, then add disability, blind, or care needs if relevant."
                   onClick={() => addPerson('child')}
                 />
               </div>
@@ -378,7 +428,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
               <div className="member-subsection">
                 <div className="member-subsection-header">
                   <div>
-                    <div className="member-subsection-title">Children</div>
+                    <div className="member-subsection-title">Dependents</div>
                     <div className="member-subsection-copy">{dependentCount} of {maxDependents}</div>
                   </div>
                   <button
@@ -386,9 +436,9 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                     className="member-add-btn"
                     onClick={() => addPerson('child')}
                     disabled={dependentCount >= maxDependents}
-                    title={dependentCount >= maxDependents ? `This calculator supports up to ${maxDependents} children.` : 'Add child'}
+                    title={dependentCount >= maxDependents ? `This calculator supports up to ${maxDependents} dependents.` : 'Add dependent'}
                   >
-                    Add child
+                    Add dependent
                   </button>
                 </div>
                 <div className="dependent-card-grid">
@@ -421,6 +471,11 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                           />
                         </label>
                       </div>
+
+                      <PersonFlagGrid
+                        person={person}
+                        updatePerson={(partial) => updatePerson(index, partial)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -449,8 +504,8 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                 <strong>{adultCount} adult{adultCount === 1 ? '' : 's'}</strong>
               </button>
               <button type="button" className="wizard-review-item" onClick={() => goToStep('dependents')}>
-                <span>Children</span>
-                <strong>{dependentCount} child{dependentCount === 1 ? '' : 'ren'}</strong>
+                <span>Dependents</span>
+                <strong>{dependentCount} dependent{dependentCount === 1 ? '' : 's'}</strong>
               </button>
             </div>
 
@@ -496,20 +551,6 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                       label="Childcare costs"
                       value={inputs.childcare_expenses_annual}
                       onChange={(value) => update({ childcare_expenses_annual: value })}
-                    />
-                  </div>
-                </section>
-
-                <section className="advanced-section">
-                  <h3 className="advanced-section-title">Chart</h3>
-                  <div className="advanced-field-grid">
-                    <CurrencyField
-                      id="chart_max_earned_income"
-                      label="Chart max earnings"
-                      step={10000}
-                      value={inputs.chart_max_earned_income}
-                      onChange={(value) => update({ chart_max_earned_income: value || 130000 })}
-                      tooltip="Upper bound for the earnings axis on the chart."
                     />
                   </div>
                 </section>

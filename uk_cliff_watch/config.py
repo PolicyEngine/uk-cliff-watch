@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 DEFAULT_YEAR = 2026
-# Sweep to £130k so the £100k–£125,140 personal-allowance trap is on the curve.
-DEFAULT_SERIES_MAX_EARNINGS = 130_000
+# Sweep to £120k (covers the onset of the £100k personal-allowance trap).
+DEFAULT_SERIES_MAX_EARNINGS = 120_000
 DEFAULT_SERIES_STEP = 500
 DEFAULT_CLIFF_DELTA = 1_000
 DEFAULT_SERIES_EARNINGS_BUFFER = 20_000
