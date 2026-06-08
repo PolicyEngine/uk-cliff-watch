@@ -1,21 +1,24 @@
-'use client';
+"use client";
 
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 
-const App = dynamic(() => import('../src/App.jsx'), {
+// Lazy-load the interactive app (which pulls in recharts and the wizard) so
+// the initial document is small and chart code only ships when the user
+// reaches the page. ssr is false because the app uses browser-only APIs
+// (window, navigator.clipboard) and the project is a static export.
+const App = dynamic(() => import("../src/App.jsx"), {
   ssr: false,
   loading: () => (
     <div
+      className="app-loading"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60vh',
-        color: '#5a6b7b',
-        fontSize: '1rem',
+        padding: "48px 24px",
+        textAlign: "center",
+        color: "#475569",
+        fontSize: 14,
       }}
     >
-      Loading UK CliffWatch…
+      Loading CliffWatch…
     </div>
   ),
 });

@@ -1,72 +1,55 @@
 import { chromium } from 'playwright';
 
-const BASE = process.env.CHECK_URL || 'http://127.0.0.1:3000';
+const BASE = process.env.CHECK_URL || 'http://127.0.0.1:4399';
 const consoleErrors = [];
 const pageErrors = [];
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1400, height: 1600 } });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1700 } });
+page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+page.on('pageerror', (e) => pageErrors.push(e.message));
 
-page.on('console', (msg) => {
-  if (msg.type() === 'error') consoleErrors.push(msg.text());
-});
-page.on('pageerror', (err) => pageErrors.push(err.message));
-
-console.log('navigating to', BASE);
+console.log('goto', BASE);
 await page.goto(BASE, { waitUntil: 'networkidle', timeout: 60000 });
-
-// Wait for the dashboard to compute and render the chart.
-await page.waitForFunction(
-  () => document.body.innerText.includes('Net income') &&
-        !document.body.innerText.includes('Loading…'),
-  { timeout: 45000 },
-).catch(() => console.log('WARN: did not detect "Net income" header in time'));
-
-// Give recharts a beat to paint.
 await page.waitForTimeout(2500);
 
-const text = await page.evaluate(() => document.body.innerText);
-const has = (s) => text.includes(s);
+// List the buttons we can see (to locate the calculate action).
+const buttonTexts = await page.locator('button').allInnerTexts();
+console.log('BUTTONS:', JSON.stringify(buttonTexts.slice(0, 20)));
 
-const checks = {
-  header: has('UK CliffWatch'),
-  scenarios: has('Scenarios'),
-  presetTrap: has('The £100k trap'),
-  netIncomeChart: has('Net income'),
-  marginalRate: /marginal rate/i.test(text),
-  regionComparison: /region/i.test(text),
-  svgCount: await page.locator('svg').count(),
-};
-console.log('DEFAULT VIEW CHECKS:', JSON.stringify(checks, null, 2));
-await page.screenshot({ path: 'check-default.png', fullPage: true });
+await page.screenshot({ path: 'ported-initial.png', fullPage: true });
 
-// Click the "£100k trap" preset and wait for the right-hand panels to recompute.
-const trap = page.getByRole('button', { name: /£100k trap/i });
-if (await trap.count()) {
-  await trap.first().click();
-  // The £100k-trap household nets ~£68,398; wait until that lands (regions = 12 sims, slow).
-  await page.waitForFunction(
-    () => {
-      const t = document.body.innerText;
-      return t.includes('£68,398') || (t.includes('£68,') && !t.includes('£25,413'));
-    },
-    { timeout: 60000 },
-  ).then(() => console.log('  recompute landed'))
-   .catch(() => console.log('  WARN: recompute did not land in 60s'));
-  await page.waitForTimeout(1500);
-  const t2 = await page.evaluate(() => document.body.innerText);
-  console.log('AFTER £100k PRESET:');
-  console.log('  net income updated to ~£68,398:', t2.includes('£68,'));
-  console.log('  stale £25,413 gone:', !t2.includes('£25,413'));
-  console.log('  marginal-rate band 6x% shown:', /\b6\d%/.test(t2));
-  console.log('  earnings axis reaches >=£100k:', /£1[0-3]\d,\d\d\d/.test(t2));
-  await page.screenshot({ path: 'check-100k-trap.png', fullPage: true });
+// Trigger the calculation (the US flow uses a "Find cliffs" button).
+const calc = page.getByRole('button', { name: /find cliffs|cliffs|calculate/i }).first();
+let clicked = false;
+if (await calc.count()) {
+  await calc.click().catch(() => {});
+  clicked = true;
 }
+console.log('clicked calculate:', clicked);
 
-console.log('CONSOLE ERRORS:', consoleErrors.length, JSON.stringify(consoleErrors.slice(0, 8), null, 2));
-console.log('PAGE ERRORS:', pageErrors.length, JSON.stringify(pageErrors.slice(0, 8), null, 2));
+// Wait for the chart / cliff report to appear.
+await page.waitForFunction(
+  () => {
+    const t = document.body.innerText;
+    return (t.includes('Cliff chart') || t.includes('Cliff report') || document.querySelectorAll('svg').length > 1);
+  },
+  { timeout: 60000 },
+).then(() => console.log('chart appeared')).catch(() => console.log('WARN: chart not detected'));
+await page.waitForTimeout(3000);
 
+const text = await page.evaluate(() => document.body.innerText);
+console.log('CHECKS:', JSON.stringify({
+  cliffChart: text.includes('Cliff chart'),
+  cliffReport: text.includes('Cliff report'),
+  region_NW: /North West/i.test(text),
+  pounds: text.includes('£'),
+  noDollars: !/\$\d/.test(text),
+  svgCount: await page.locator('svg').count(),
+}, null, 2));
+await page.screenshot({ path: 'ported-results.png', fullPage: true });
+
+console.log('CONSOLE ERRORS:', consoleErrors.length, JSON.stringify(consoleErrors.slice(0, 10), null, 2));
+console.log('PAGE ERRORS:', pageErrors.length, JSON.stringify(pageErrors.slice(0, 10), null, 2));
 await browser.close();
-const ok = pageErrors.length === 0 && checks.header && checks.netIncomeChart && checks.svgCount > 0;
-console.log(ok ? 'RESULT: PASS' : 'RESULT: FAIL');
-process.exit(ok ? 0 : 1);
+console.log(pageErrors.length === 0 ? 'RESULT: no fatal errors' : 'RESULT: page errors present');

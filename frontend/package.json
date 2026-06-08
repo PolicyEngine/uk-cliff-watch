@@ -1,23 +1,25 @@
 {
-  "name": "uk-cliff-watch-frontend",
-  "version": "0.1.0",
+  "name": "cliff-watch-frontend",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
+    "test": "node --test 'src/**/*.test.js'",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "next": "^16",
-    "react": "^19",
-    "react-dom": "^19",
-    "recharts": "^2.10"
+    "@policyengine/ui-kit": "^0.12.0",
+    "next": "^16.2.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^2.10.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.0",
     "playwright": "^1.60.0",
-    "postcss": "^8",
-    "tailwindcss": "^4"
+    "postcss": "^8.5.0",
+    "tailwindcss": "^4.2.0"
   }
 }

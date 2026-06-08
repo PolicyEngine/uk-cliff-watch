@@ -1,351 +1,237 @@
-'use client';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import InputPanel from './components/InputPanel'
+// Lazy-load the chart-heavy ResultsPanel (and its recharts dependencies) so
+// the initial JS bundle is small. The panel is only mounted after the user
+// hits "Find cliffs," so this defers ~hundreds of KB of chart code.
+const ResultsPanel = lazy(() => import('./components/ResultsPanel'))
+import {
+  calculateSeries,
+  createInitialInputs,
+  hasCompleteRequiredInputs,
+  loadMetadata,
+} from './dataLookup'
+import { decodeInputs, syncUrlToInputs } from './utils/urlState'
+import { refineCliffZones } from './utils/seriesRefine'
 
-import { useEffect, useRef, useState } from 'react';
-import { getMetadata, calculate, series, regions } from './api.js';
-// format.js is consumed by child components; import here if needed for future inline display
-import InputPanel from './components/InputPanel.jsx';
-import CliffInsights from './components/CliffInsights.jsx';
-import BenefitChart from './components/BenefitChart.jsx';
-import ProgramBreakdown from './components/ProgramBreakdown.jsx';
-import RegionComparison from './components/RegionComparison.jsx';
-
-const PALETTE = {
-  primary: '#2C6496',
-  teal: '#39C6C0',
-  red: '#d9534f',
-  bg: '#F7F9FB',
-  text: '#1A1A1A',
-  muted: '#5A6B7B',
-  border: '#e2e8f0',
-  white: '#ffffff',
-};
-
-function buildPayload(defaults) {
-  return {
-    region: defaults.region,
-    earned_income: defaults.earned_income ?? 0,
-    year: 2026,
-    rent_annual: defaults.rent_annual ?? 9000,
-    childcare_expenses_annual: 0,
-    is_renting: true,
-    people: (defaults.people ?? []).map((p) => ({
-      kind: p.kind ?? p.type ?? 'adult',
-      age: p.age,
-    })),
-  };
-}
-
-function Placeholder({ text = 'Calculating…' }) {
-  return (
-    <div
-      style={{
-        background: PALETTE.white,
-        border: `1px solid ${PALETTE.border}`,
-        borderRadius: 8,
-        padding: '2rem',
-        textAlign: 'center',
-        color: PALETTE.muted,
-        fontSize: '0.9rem',
-      }}
-    >
-      {text}
-    </div>
-  );
-}
-
-export default function App() {
-  const [metadata, setMetadata] = useState(null);
-  const [payload, setPayload] = useState(null);
-  const [result, setResult] = useState(null);
-  const [seriesData, setSeriesData] = useState(null);
-  const [regionsData, setRegionsData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [view, setView] = useState('net_income');
-  const [activePreset, setActivePreset] = useState('uc_taper');
-
-  const debounceRef = useRef(null);
-
-  function applyPreset(preset) {
-    setActivePreset(preset.id);
-    setPayload({
-      year: 2026,
-      region: preset.payload.region,
-      earned_income: preset.payload.earned_income ?? 0,
-      rent_annual: preset.payload.rent_annual ?? 0,
-      childcare_expenses_annual: preset.payload.childcare_expenses_annual ?? 0,
-      is_renting: preset.payload.is_renting ?? (preset.payload.rent_annual ?? 0) > 0,
-      people: (preset.payload.people ?? []).map((p) => ({ kind: p.kind, age: p.age })),
-    });
+function cleanSeriesErrorMessage(error) {
+  const message = error?.message?.trim()
+  if (!message) {
+    return 'The cliff chart is unavailable right now.'
   }
 
-  function handlePanelChange(next) {
-    setActivePreset(null); // manual edit deselects the preset
-    setPayload(next);
+  if (message.startsWith('Calculation failed:')) {
+    return message
   }
 
-  // Fetch metadata once on mount
+  return `Chart calculation failed: ${message}`
+}
+
+function App() {
+  const [metadata, setMetadata] = useState(null)
+  const [inputs, setInputs] = useState(null)
+  const [seriesData, setSeriesData] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [seriesLoading, setSeriesLoading] = useState(false)
+  const [hasCalculated, setHasCalculated] = useState(false)
+  const [error, setError] = useState(null)
+  const [seriesError, setSeriesError] = useState(null)
+  const resultsRef = useRef(null)
+  const requestVersionRef = useRef(0)
+  const handleCalculateRef = useRef(null)
+  const autoCalculateRef = useRef(null)
+
   useEffect(() => {
-    getMetadata()
+    loadMetadata()
       .then((meta) => {
-        setMetadata(meta);
-        setPayload(buildPayload(meta.defaults));
+        setMetadata(meta)
+        const fromUrl = typeof window !== 'undefined'
+          ? decodeInputs(window.location.search)
+          : null
+        const initial = createInitialInputs(meta)
+        if (fromUrl) {
+          // Merge URL-decoded fields over the metadata defaults
+          const seeded = { ...initial, ...fromUrl }
+          // Ensure people come from URL if present, else keep defaults
+          setInputs(seeded)
+          syncUrlToInputs(seeded)
+          autoCalculateRef.current = seeded
+        } else {
+          setInputs(initial)
+        }
       })
-      .catch((err) => {
-        setError(`Failed to load metadata: ${err.message}`);
-      });
-  }, []);
+      .catch((err) => setError(err.message || 'Failed to load app metadata.'))
+  }, [])
 
-  // Recalculate whenever payload changes, with 350ms debounce
   useEffect(() => {
-    if (!payload) return;
+    if (inputs && metadata) {
+      syncUrlToInputs(inputs)
+    }
+  }, [inputs, metadata])
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+  useEffect(() => {
+    if (metadata && autoCalculateRef.current && handleCalculateRef.current) {
+      const pending = autoCalculateRef.current
+      autoCalculateRef.current = null
+      handleCalculateRef.current(pending)
+    }
+  })
 
-    debounceRef.current = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
+  const clearResults = () => {
+    requestVersionRef.current += 1
+    setSeriesData(null)
+    setSeriesLoading(false)
+    setLoading(false)
+    setHasCalculated(false)
+    setError(null)
+    setSeriesError(null)
+  }
+
+  const handleInputsChange = (nextInputs) => {
+    setInputs(nextInputs)
+    clearResults()
+  }
+
+  const handleReset = () => {
+    if (!metadata) return
+    setInputs(createInitialInputs(metadata))
+    clearResults()
+  }
+
+  const runSeries = async (
+    nextInputs,
+    requestVersion = requestVersionRef.current,
+  ) => {
+    if (requestVersion !== requestVersionRef.current) return
+    setSeriesLoading(true)
+    setSeriesData(null)
+    setSeriesError(null)
+
+    const defaultStep = metadata?.defaults?.series_step || 500
+    const fallbackStep = Math.max(defaultStep, 2500)
+    const isCancelled = () => requestVersion !== requestVersionRef.current
+
+    let primary = null
+    let primaryError = null
+    try {
+      primary = await calculateSeries(nextInputs, metadata, { step: defaultStep })
+    } catch (err) {
+      primaryError = err
+      console.error(err)
+    }
+
+    if (isCancelled()) return
+
+    if (!primary) {
+      let fallbackError = null
       try {
-        const seriesPayload = {
-          ...payload,
-          max_earned_income: metadata?.defaults?.series_max_earned_income ?? 130000,
-          step: metadata?.defaults?.series_step ?? 500,
-        };
-
-        const [calcRes, seriesRes, regionsRes] = await Promise.all([
-          calculate(payload),
-          series(seriesPayload),
-          regions(payload),
-        ]);
-
-        setResult(calcRes.result);
-        setSeriesData(seriesRes);
-        setRegionsData(regionsRes);
+        primary = await calculateSeries(nextInputs, metadata, { step: fallbackStep })
+        if (isCancelled()) return
+        setSeriesError('Sampled coarsely for speed; refining around detected cliffs.')
       } catch (err) {
-        setError(`Calculation error: ${err.message}`);
-        setResult(null);
-        setSeriesData(null);
-        setRegionsData(null);
-      } finally {
-        setLoading(false);
+        fallbackError = err
+        console.error(err)
+        if (isCancelled()) return
+        setSeriesError(cleanSeriesErrorMessage(fallbackError || primaryError))
+        setSeriesLoading(false)
+        return
       }
-    }, 350);
+    }
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [payload, metadata]);
+    setSeriesData(primary)
+    setSeriesLoading(false)
+
+    const refineStep = Math.max(100, Math.floor((primary?.step_annual || defaultStep) / 5))
+    try {
+      const refined = await refineCliffZones({
+        coarseSeries: primary,
+        inputs: nextInputs,
+        metadata,
+        refineStep,
+        calculateSeriesFn: calculateSeries,
+        isCancelled,
+      })
+      if (isCancelled()) return
+      if (refined !== primary) {
+        setSeriesData(refined)
+      }
+    } catch (err) {
+      console.error('Refinement error', err)
+    }
+  }
+
+  const handleCalculate = async (nextInputs = inputs) => {
+    if (!metadata || !nextInputs || !hasCompleteRequiredInputs(nextInputs)) return
+
+    const requestVersion = requestVersionRef.current + 1
+    requestVersionRef.current = requestVersion
+    setSeriesData(null)
+    setSeriesError(null)
+    setLoading(true)
+    setHasCalculated(true)
+    setError(null)
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+
+    try {
+      await runSeries(nextInputs, requestVersion)
+      if (requestVersion !== requestVersionRef.current) return
+      setLoading(false)
+    } catch (err) {
+      if (requestVersion !== requestVersionRef.current) return
+      setError(err.message || 'Calculation failed. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    handleCalculateRef.current = handleCalculate
+  })
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: PALETTE.bg,
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif",
-        color: PALETTE.text,
-      }}
-    >
-      {/* Header */}
-      <header
-        style={{
-          background: PALETTE.primary,
-          color: '#fff',
-          padding: '0 1.5rem',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1280,
-            margin: '0 auto',
-            padding: '1rem 0',
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: '1rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          <h1
-            style={{
-              fontSize: '1.5rem',
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.2,
-            }}
-          >
-            UK CliffWatch
-          </h1>
-          <p
-            style={{
-              fontSize: '0.9rem',
-              color: 'rgba(255,255,255,0.8)',
-              flexGrow: 1,
-            }}
-          >
-            How the tax-and-benefit system taxes the next pound of work
-          </p>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              color: 'rgba(255,255,255,0.6)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Built on{' '}
-            <a
-              href="https://policyengine.org/uk"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: PALETTE.teal, textDecoration: 'underline' }}
-            >
-              PolicyEngine UK
-            </a>
-          </span>
+    <div className="app-shell">
+      <header className="app-hero">
+        <div className="app-hero-inner">
+          <h1>CliffWatch</h1>
+          <p>See where Universal Credit withdrawal, the High-Income Child Benefit Charge and taxes create cliffs and high marginal rates as earnings rise.</p>
         </div>
       </header>
 
-      {/* Error banner */}
-      {error && (
-        <div
-          style={{
-            background: '#fff3f3',
-            borderBottom: `3px solid ${PALETTE.red}`,
-            color: '#a00',
-            padding: '0.75rem 1.5rem',
-            fontSize: '0.875rem',
-          }}
+      <main className="app">
+        <InputPanel
+          metadata={metadata}
+          inputs={inputs}
+          loading={loading}
+          onCalculate={handleCalculate}
+          onInputsChange={handleInputsChange}
+          onReset={handleReset}
+        />
+
+        <div ref={resultsRef} />
+        <Suspense
+          fallback={
+            <div
+              className="results-panel-loading"
+              style={{ padding: '32px 16px', textAlign: 'center', color: '#475569' }}
+            >
+              Loading cliff chart…
+            </div>
+          }
         >
-          {error}
-        </div>
-      )}
-
-      {/* Main layout */}
-      <main
-        style={{
-          maxWidth: 1280,
-          margin: '0 auto',
-          padding: '1.5rem',
-        }}
-      >
-        {!metadata || !payload ? (
-          <Placeholder text={error ? 'Could not load configuration.' : 'Loading…'} />
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(280px, 320px) 1fr',
-              gap: '1.5rem',
-              alignItems: 'start',
-            }}
-          >
-            {/* Left: inputs */}
-            <div style={{ position: 'sticky', top: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {Array.isArray(metadata.presets) && metadata.presets.length > 0 && (
-                <div
-                  style={{
-                    background: PALETTE.white,
-                    border: `1px solid ${PALETTE.border}`,
-                    borderRadius: 8,
-                    padding: '1rem',
-                  }}
-                >
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: PALETTE.muted, marginBottom: '0.6rem' }}>
-                    Scenarios
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {metadata.presets.map((preset) => {
-                      const active = activePreset === preset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => applyPreset(preset)}
-                          title={preset.description}
-                          style={{
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            border: `1px solid ${active ? PALETTE.primary : PALETTE.border}`,
-                            background: active ? PALETTE.primary : PALETTE.white,
-                            color: active ? '#fff' : PALETTE.text,
-                            borderRadius: 8,
-                            padding: '0.55rem 0.7rem',
-                            transition: 'all 0.12s ease',
-                          }}
-                        >
-                          <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{preset.label}</div>
-                          <div style={{ fontSize: '0.75rem', color: active ? 'rgba(255,255,255,0.85)' : PALETTE.muted }}>
-                            {preset.tagline}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              <InputPanel
-                metadata={metadata}
-                payload={payload}
-                onChange={handlePanelChange}
-                loading={loading}
-              />
-            </div>
-
-            {/* Right: charts & insights */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {result ? (
-                <CliffInsights result={result} series={seriesData} />
-              ) : (
-                <Placeholder />
-              )}
-
-              {seriesData ? (
-                <BenefitChart
-                  series={seriesData}
-                  payload={payload}
-                  view={view}
-                  onViewChange={setView}
-                />
-              ) : (
-                <Placeholder />
-              )}
-
-              {result ? (
-                <ProgramBreakdown result={result} />
-              ) : (
-                <Placeholder />
-              )}
-
-              {regionsData ? (
-                <RegionComparison
-                  regions={regionsData.regions}
-                  selectedRegion={payload.region}
-                />
-              ) : (
-                <Placeholder />
-              )}
-            </div>
-          </div>
-        )}
+          <ResultsPanel
+            metadata={metadata}
+            inputs={inputs}
+            seriesData={seriesData}
+            loading={loading}
+            seriesLoading={seriesLoading}
+            hasCalculated={hasCalculated}
+            error={error}
+            seriesError={seriesError}
+          />
+        </Suspense>
       </main>
-
-      {/* Footer */}
-      <footer
-        style={{
-          marginTop: '3rem',
-          padding: '1.5rem',
-          textAlign: 'center',
-          fontSize: '0.75rem',
-          color: PALETTE.muted,
-          borderTop: `1px solid ${PALETTE.border}`,
-        }}
-      >
-        UK CliffWatch — powered by{' '}
-        <a href="https://policyengine.org/uk" target="_blank" rel="noopener noreferrer">
-          PolicyEngine UK
-        </a>
-        . Tax year {payload?.year ?? 2026}. For illustrative purposes only.
-      </footer>
     </div>
-  );
+  )
 }
+
+export default App

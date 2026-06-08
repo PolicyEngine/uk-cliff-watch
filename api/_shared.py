@@ -60,6 +60,7 @@ def metadata_response() -> dict[str, Any]:
             ],
             "earned_income": 0,
             "rent_annual": 9000,
+            "chart_max_earned_income": DEFAULT_SERIES_MAX_EARNINGS,
             "series_max_earned_income": DEFAULT_SERIES_MAX_EARNINGS,
             "series_step": DEFAULT_SERIES_STEP,
             "series_earnings_buffer": DEFAULT_SERIES_EARNINGS_BUFFER,

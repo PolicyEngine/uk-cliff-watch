@@ -1,28 +1,52 @@
-import ClientApp from './ClientApp.jsx';
+import ClientApp from "./ClientApp";
 
+// Server-rendered crawler-visible content. The interactive app is hydrated
+// client-side via `<ClientApp />`. CliffWatch is a static export, so this
+// markup is what crawlers (Googlebot, Bingbot, social previews) see before
+// JavaScript executes.
 export default function Page() {
   return (
     <>
-      <section className="visually-hidden" aria-hidden="true">
-        <h1>UK CliffWatch — PolicyEngine benefit cliff and marginal tax rate explorer</h1>
+      <section
+        className="seo-static-content"
+        aria-hidden="false"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: "hidden",
+          clip: "rect(0, 0, 0, 0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      >
+        <h1>UK CliffWatch — PolicyEngine benefit cliff explorer</h1>
         <p>
-          UK CliffWatch visualises how the UK tax-and-benefit system interacts across the
-          earnings spectrum, focusing on benefit cliffs, Universal Credit taper rates, and
-          effective marginal tax rates (EMTRs). As earnings rise, households can face
-          marginal rates above 70–80% because multiple benefits withdraw simultaneously
-          while income tax and National Insurance are also deducted. CliffWatch maps these
-          interactions for a range of household types, regions, and income levels.
+          UK CliffWatch is a free, open-source tool from PolicyEngine that maps
+          benefit cliffs and effective marginal tax rates for UK households. Enter
+          a household&apos;s region, composition and rent to see how net resources
+          change as earnings rise — with the Universal Credit 55% taper, the
+          High-Income Child Benefit Charge, and the £100,000 personal-allowance
+          trap all highlighted along the curve.
         </p>
+        <h2>What UK CliffWatch shows</h2>
         <ul>
-          <li>Net income and net-after-housing-costs as earned income rises from zero</li>
-          <li>Effective marginal tax rate at each point on the earnings spectrum</li>
-          <li>Benefit cliff locations — sharp drops in net income or sharp jumps in EMTR</li>
-          <li>Program-by-program breakdown of benefits and taxes for a given household</li>
-          <li>Regional comparison of net income across UK regions for the same household</li>
-          <li>Impact of Universal Credit taper and work allowances on take-home pay</li>
+          <li>Net household income as earnings rise</li>
+          <li>Benefit cliffs where small earnings gains cause large net losses</li>
+          <li>Effective marginal tax rates across the income distribution</li>
+          <li>Program-level breakdowns for UK benefits and taxes</li>
+          <li>Side-by-side comparisons across all 12 UK regions</li>
         </ul>
+        <h2>Programs modelled</h2>
+        <p>
+          Universal Credit, Child Benefit, Child Tax Credit, Working Tax Credit,
+          Housing Benefit, Council Tax Reduction, Pension Credit, Tax-Free
+          Childcare, Free School Meals, Income Tax, National Insurance, and
+          Council Tax.
+        </p>
       </section>
-
       <ClientApp />
     </>
   );

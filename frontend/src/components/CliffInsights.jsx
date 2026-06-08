@@ -1,283 +1,232 @@
-"use client";
+import { useMemo } from 'react'
+import { formatCurrency } from '../dataLookup'
+import {
+  buildCliffReport,
+  describeDrivers,
+  formatLossRate,
+} from '../utils/cliffReport'
 
-const gbp = (v) =>
-  (v < 0 ? "−£" : "£") + Math.round(Math.abs(v || 0)).toLocaleString("en-GB");
+const MAX_ZONE_CARDS = 4
 
-const PALETTE = {
-  primaryBlue: "#2C6496",
-  teal: "#39C6C0",
-  cliffRed: "#d9534f",
-  amber: "#F4B740",
-  green: "#2E8540",
-  bg: "#F7F9FB",
-  text: "#1A1A1A",
-  muted: "#5A6B7B",
-  gridline: "#E3E8EE",
-};
-
-const styles = {
-  wrapper: {
-    background: PALETTE.bg,
-    borderRadius: 16,
-    padding: "24px 28px",
-    fontFamily:
-      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    color: PALETTE.text,
-  },
-  placeholder: {
-    color: PALETTE.muted,
-    fontSize: 14,
-    padding: "24px 0",
-    textAlign: "center",
-  },
-  cardsRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 16,
-    marginBottom: 20,
-  },
-  card: {
-    background: "#fff",
-    borderRadius: 12,
-    border: `1px solid ${PALETTE.gridline}`,
-    padding: 16,
-    flex: "1 1 180px",
-    minWidth: 160,
-    maxWidth: 260,
-  },
-  cardLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    color: PALETTE.muted,
-    marginBottom: 6,
-  },
-  cardValue: {
-    fontSize: 28,
-    fontWeight: 800,
-    lineHeight: 1.1,
-    marginBottom: 6,
-  },
-  cardNote: {
-    fontSize: 12,
-    color: PALETTE.muted,
-    lineHeight: 1.4,
-  },
-  narrative: {
-    fontSize: 14,
-    color: PALETTE.muted,
-    lineHeight: 1.7,
-    borderTop: `1px solid ${PALETTE.gridline}`,
-    paddingTop: 16,
-    margin: 0,
-  },
-};
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function marginalRateColor(rate) {
-  if (rate >= 0.6) return PALETTE.cliffRed;
-  if (rate >= 0.4) return PALETTE.amber;
-  return PALETTE.green;
-}
-
-/** Find the worst cliff in series.data (largest cliff_drop_annual > 0). */
-function findWorstCliff(data) {
-  if (!Array.isArray(data) || data.length === 0) return null;
-  let best = null;
-  for (const pt of data) {
-    const drop = pt.cliff_drop_annual || 0;
-    if (drop > 0 && (!best || drop > best.cliff_drop_annual)) {
-      best = pt;
-    }
-  }
-  return best;
-}
-
-/**
- * Find the longest consecutive run of points with marginal_rate_pct >= 60.
- * Returns { start: earned_income, end: earned_income, length } or null.
- */
-function findFlatHighRateZone(data, threshold = 60) {
-  if (!Array.isArray(data) || data.length === 0) return null;
-
-  let bestRun = null;
-  let runStart = null;
-  let runLen = 0;
-
-  for (let i = 0; i < data.length; i++) {
-    const pt = data[i];
-    if ((pt.marginal_rate_pct || 0) >= threshold) {
-      if (runStart === null) runStart = pt;
-      runLen++;
-    } else {
-      if (runLen > 0 && (!bestRun || runLen > bestRun.length)) {
-        bestRun = { start: runStart.earned_income, end: data[i - 1].earned_income, length: runLen };
-      }
-      runStart = null;
-      runLen = 0;
-    }
-  }
-  // Handle run that extends to end of array
-  if (runLen > 0 && (!bestRun || runLen > bestRun.length)) {
-    bestRun = {
-      start: runStart.earned_income,
-      end: data[data.length - 1].earned_income,
-      length: runLen,
-    };
-  }
-
-  // Only meaningful if the zone spans at least ~£2,000 of earnings
-  if (!bestRun || bestRun.end - bestRun.start < 2000) return null;
-  return bestRun;
-}
-
-/** Build the dynamic narrative paragraph. */
-function buildNarrative(result, seriesData, maxMarginalRatePct) {
-  const zone = findFlatHighRateZone(seriesData);
-
-  if (zone) {
-    const keepPence = Math.round(
-      100 - (maxMarginalRatePct || 60)
-    );
-    const keepStr = keepPence > 0 ? `${keepPence}p` : "very little";
-    return (
-      `This household keeps ${keepStr} of each extra pound earned across roughly ` +
-      `${gbp(zone.start)}–${gbp(zone.end)} of earnings — a flat wall of high marginal rates ` +
-      `created by the Universal Credit taper stacking on Income Tax and National Insurance.`
-    );
-  }
-
-  // Fallback: describe the household's net income and marginal rate
-  const netIncome = result?.totals?.net_income;
-  const emr = result?.cliff?.effective_marginal_rate;
-  if (netIncome != null && emr != null) {
-    const pct = Math.round(emr * 100);
-    return (
-      `At current earnings this household takes home ${gbp(netIncome)} per year. ` +
-      `The effective marginal rate is ${pct}% — meaning ${pct}p of each additional pound ` +
-      `is lost to tax or withdrawn benefits. Check the full curve above to see where ` +
-      `work pays best.`
-    );
-  }
-
+function CliffSummaryCard({ label, value, detail }) {
   return (
-    "Adjust the sliders above to see how taxes and benefits interact for this household " +
-    "across different earnings levels."
-  );
-}
-
-// ── component ─────────────────────────────────────────────────────────────────
-
-export default function CliffInsights({ result, series }) {
-  const hasResult = result != null;
-  const hasSeries = series != null && Array.isArray(series.data);
-
-  if (!hasResult && !hasSeries) {
-    return (
-      <div style={styles.wrapper}>
-        <div style={styles.placeholder}>Calculating…</div>
-      </div>
-    );
-  }
-
-  // ── Card 1: Marginal rate on the next £1 ─────────────────────────────────
-  const emr = result?.cliff?.effective_marginal_rate ?? null;
-  const emrPct = emr != null ? Math.round(emr * 100) : null;
-  const emrColor = emr != null ? marginalRateColor(emr) : PALETTE.muted;
-
-  // ── Card 2: Worst cliff ───────────────────────────────────────────────────
-  const worstCliff = hasSeries ? findWorstCliff(series.data) : null;
-
-  // ── Card 3: Highest marginal rate ─────────────────────────────────────────
-  const maxRate = series?.max_marginal_rate_pct ?? null;
-
-  // ── Card 4: Net income now ────────────────────────────────────────────────
-  const netIncome = result?.totals?.net_income ?? null;
-
-  // ── Narrative ─────────────────────────────────────────────────────────────
-  const narrative = buildNarrative(
-    result,
-    hasSeries ? series.data : [],
-    maxRate
-  );
-
-  return (
-    <div style={styles.wrapper}>
-      <div style={styles.cardsRow}>
-        {/* Card 1 — Marginal rate */}
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Marginal rate on the next £1</div>
-          <div style={{ ...styles.cardValue, color: emrColor }}>
-            {emrPct != null ? `${emrPct}%` : "—"}
-          </div>
-          <div style={styles.cardNote}>
-            of every extra pound earned is taken by tax or lost benefits.
-          </div>
-        </div>
-
-        {/* Card 2 — Worst cliff */}
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Worst cliff</div>
-          {worstCliff ? (
-            <>
-              <div style={{ ...styles.cardValue, color: PALETTE.cliffRed }}>
-                −{gbp(worstCliff.cliff_drop_annual)}
-              </div>
-              <div style={styles.cardNote}>
-                at {gbp(worstCliff.earned_income)} of earnings
-                {Array.isArray(worstCliff.cliff_drivers) &&
-                  worstCliff.cliff_drivers.length > 0 && (
-                    <>
-                      {" · "}
-                      {worstCliff.cliff_drivers
-                        .slice(0, 2)
-                        .map((d) => d.label)
-                        .join(", ")}
-                    </>
-                  )}
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ ...styles.cardValue, color: PALETTE.green }}>
-                No hard cliff
-              </div>
-              <div style={styles.cardNote}>but watch the marginal rate.</div>
-            </>
-          )}
-        </div>
-
-        {/* Card 3 — Highest marginal rate */}
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Highest marginal rate</div>
-          <div
-            style={{
-              ...styles.cardValue,
-              color:
-                maxRate != null
-                  ? marginalRateColor(maxRate / 100)
-                  : PALETTE.muted,
-            }}
-          >
-            {maxRate != null ? `${Math.round(maxRate)}%` : "—"}
-          </div>
-          <div style={styles.cardNote}>the steepest point on the curve.</div>
-        </div>
-
-        {/* Card 4 — Net income now */}
-        <div style={styles.card}>
-          <div style={styles.cardLabel}>Net income now</div>
-          <div style={{ ...styles.cardValue, color: PALETTE.primaryBlue }}>
-            {netIncome != null ? gbp(netIncome) : "—"}
-          </div>
-          <div style={styles.cardNote}>take-home after tax and benefits.</div>
-        </div>
-      </div>
-
-      {/* Narrative paragraph */}
-      <p style={styles.narrative}>{narrative}</p>
+    <div className="cliff-summary-card">
+      <span className="cliff-summary-label">{label}</span>
+      <strong className="cliff-summary-value">{value}</strong>
+      <span className="cliff-summary-detail">{detail}</span>
     </div>
-  );
+  )
 }
+
+function CliffInsights({ data, stepAnnual }) {
+  const report = useMemo(() => buildCliffReport(data), [data])
+
+  const highlightedZones = useMemo(() => (
+    [...report.zones]
+      .sort((left, right) => right.largestDropAnnual - left.largestDropAnnual)
+      .slice(0, MAX_ZONE_CARDS)
+  ), [report.zones])
+
+  const thresholdCopy = `${formatCurrency(report.thresholds?.minDropAnnual || 0)}/yr net loss or any single benefit loss or household cost increase of ${formatCurrency(report.thresholds?.minDriverLossAnnual || 0)}/yr`
+
+  if (report.cliffs.length === 0) {
+    return (
+      <div className="cliff-insights">
+        <div className="cliff-insights-header">
+          <div>
+            <h4>Cliff report</h4>
+            <p className="chart-subtitle">
+              The report only calls out meaningful losses: {thresholdCopy}.
+            </p>
+            <p className="chart-subtitle">
+              Cliff bands show the sampled earnings range where a loss appears. For example, a {formatCurrency(stepAnnual || 500)}/yr band means the household still has the program at the lower value and loses it by the upper value.
+            </p>
+          </div>
+          {stepAnnual ? (
+            <p className="chart-subtitle cliff-resolution-note">
+              Calculated in {formatCurrency(stepAnnual)}/year increments.
+            </p>
+          ) : null}
+        </div>
+        <div className="cliff-empty-panel">
+          <strong>No cliffs detected at this resolution.</strong>
+          <p>
+            {report.hiddenCliffCount > 0
+              ? 'We only found smaller phase-downs below the reporting threshold, so the curve does not show a meaningful benefit cliff.'
+              : 'Net income rises steadily across the sampled earnings curve. Smaller cliffs can still exist between the plotted steps.'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const largestCliff = report.largestCliff
+  const worstLossRateCliff = report.worstLossRateCliff
+  const firstCliff = report.firstCliff
+  const dominantDriver = report.dominantDrivers[0]
+  const biggestDropDriver = largestCliff.material_cliff_drivers?.[0] || null
+  const overview = `The first meaningful cliff band begins around ${formatCurrency(firstCliff.startIncomeAnnual)}/yr in earnings. The biggest single-step drop is ${formatCurrency(largestCliff.dropAnnual)}/yr at ${formatCurrency(largestCliff.endIncomeAnnual)}/yr, driven mostly by ${describeDrivers(largestCliff.material_cliff_drivers || report.dominantDrivers)}.`
+
+  return (
+    <div className="cliff-insights">
+      <div className="cliff-insights-header">
+        <div>
+          <h4>Cliff report</h4>
+          <p className="chart-subtitle">
+            The report only calls out meaningful losses: {thresholdCopy}.
+          </p>
+          <p className="chart-subtitle">
+            Cliff bands show the sampled earnings range where a loss appears. For example, a {formatCurrency(stepAnnual || 500)}/yr band means the household still has the program at the lower value and loses it by the upper value.
+          </p>
+        </div>
+        {stepAnnual ? (
+          <p className="chart-subtitle cliff-resolution-note">
+            Calculated in {formatCurrency(stepAnnual)}/year increments.
+          </p>
+        ) : null}
+      </div>
+
+      <p className="cliff-overview">
+        {overview}
+      </p>
+
+      {report.hiddenCliffCount > 0 ? (
+        <p className="cliff-threshold-note">
+          {report.hiddenCliffCount} smaller drop{report.hiddenCliffCount === 1 ? '' : 's'} below that threshold {report.hiddenCliffCount === 1 ? 'was' : 'were'} hidden to keep the focus on material cliffs.
+        </p>
+      ) : null}
+
+      <div className="cliff-summary-grid">
+        <CliffSummaryCard
+          label="First cliff band"
+          value={`${formatCurrency(firstCliff.startIncomeAnnual)}/yr`}
+          detail={`Sharpest point at ${formatCurrency(firstCliff.endIncomeAnnual)}/yr in earnings`}
+        />
+        <CliffSummaryCard
+          label="Largest single-step drop"
+          value={`${formatCurrency(largestCliff.dropAnnual)}/yr`}
+          detail={`At ${formatCurrency(largestCliff.endIncomeAnnual)}/yr in earnings`}
+        />
+        <CliffSummaryCard
+          label="Highest loss per £1 earned"
+          value={formatLossRate(worstLossRateCliff.lossRate)}
+          detail={`At roughly ${formatCurrency(worstLossRateCliff.endIncomeAnnual)}/yr in earnings`}
+        />
+        <CliffSummaryCard
+          label="Largest recurring driver"
+          value={dominantDriver?.label || 'Mixed losses'}
+          detail={
+            biggestDropDriver
+              ? `${biggestDropDriver.label} drives ${formatCurrency(Math.abs(biggestDropDriver.resource_effect_annual))}/yr of the biggest drop`
+              : dominantDriver
+                ? `${formatCurrency(dominantDriver.totalImpactAnnual)}/yr across the reported cliffs`
+                : `${report.zones.length} earnings band${report.zones.length === 1 ? '' : 's'} to watch`
+          }
+        />
+      </div>
+
+      <div className="cliff-card-list">
+        {highlightedZones.map((zone) => (
+          <div
+            key={zone.id}
+            className={`cliff-card cliff-card--${zone.severity.tone}`}
+          >
+            <div className="cliff-card-topline">
+              <span className={`cliff-severity cliff-severity--${zone.severity.tone}`}>
+                {zone.severity.label}
+              </span>
+              {' '}
+              <span className="cliff-card-count">
+                {zone.cliffCount} {zone.cliffCount === 1 ? 'step' : 'steps'}
+              </span>
+            </div>
+
+            <div className="cliff-card-header">
+              <span className="cliff-card-income">
+                {formatCurrency(zone.startIncomeAnnual)} to {formatCurrency(zone.endIncomeAnnual)}/yr in earnings
+              </span>
+              {' '}
+              <span className="cliff-card-drop">
+                {formatCurrency(zone.largestDropAnnual)}/yr largest drop
+              </span>
+            </div>
+
+            <div className="cliff-card-grid">
+              <div>
+                <p className="cliff-card-copy">
+                  In this earnings band, net income moves from {formatCurrency(zone.beforeResourcesAnnual)}/yr to {formatCurrency(zone.afterResourcesAnnual)}/yr. The sharpest single-step loss is {formatCurrency(zone.largestDropAnnual)}/yr, and the main driver is {zone.driverSummary}.
+                </p>
+
+                <div className="cliff-card-stats">
+                  <div className="cliff-card-stat">
+                    <span className="cliff-card-stat-label">Total losses in band</span>
+                    {' '}
+                    <strong className="cliff-card-stat-value">
+                      {formatCurrency(zone.totalDropAnnual)}/yr
+                    </strong>
+                  </div>
+                  <div className="cliff-card-stat">
+                    <span className="cliff-card-stat-label">Highest loss per £1 earned</span>
+                    {' '}
+                    <strong className="cliff-card-stat-value">
+                      {formatLossRate(zone.worstLossRate)}
+                    </strong>
+                  </div>
+                  <div className="cliff-card-stat">
+                    <span className="cliff-card-stat-label">Biggest drop at</span>
+                    {' '}
+                    <strong className="cliff-card-stat-value">
+                      {formatCurrency(zone.highestRiskIncomeAnnual)}/yr in earnings
+                    </strong>
+                  </div>
+                  <div className="cliff-card-stat">
+                    <span className="cliff-card-stat-label">Reported drops</span>
+                    {' '}
+                    <strong className="cliff-card-stat-value">
+                      {zone.cliffCount} {zone.cliffCount === 1 ? 'step' : 'steps'}
+                    </strong>
+                  </div>
+                  <div className="cliff-card-stat">
+                    <span className="cliff-card-stat-label">Earnings to recover pre-cliff net</span>
+                    {' '}
+                    <strong className="cliff-card-stat-value">
+                      {zone.recoveredWithinChart
+                        ? `+${formatCurrency(zone.recoveryGapAnnual)}/yr (at ${formatCurrency(zone.recoveryIncomeAnnual)}/yr)`
+                        : `More than ${formatCurrency(zone.chartMaxIncomeAnnual)}/yr — does not recover in chart window`}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="cliff-driver-panel">
+                <h5>What is driving this cliff?</h5>
+                {zone.dominantDrivers.length ? (
+                  <div className="cliff-driver-list">
+                    {zone.dominantDrivers.slice(0, 3).map((driver) => (
+                      <div key={`${zone.id}-${driver.key}`} className="cliff-driver">
+                        <span className="cliff-driver-label">
+                          {driver.label}
+                          {driver.occurrences > 1 ? ` (${driver.occurrences} hits)` : ''}
+                        </span>
+                        {' '}
+                        <span className="cliff-driver-impact">
+                          {formatCurrency(driver.totalImpactAnnual)}/yr
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="cliff-card-copy">
+                    No single dominant driver was identified for this zone.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default CliffInsights

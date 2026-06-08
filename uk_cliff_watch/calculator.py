@@ -369,10 +369,18 @@ def calculate_household(payload: HouseholdInput, *, delta: int = DEFAULT_CLIFF_D
             ],
         },
         "template": {k: descriptor[k] for k in ("id", "label", "short_label", "description", "summary")},
+        "counts": {
+            "num_adults": sum(1 for p in descriptor["people"] if p["kind"] == "adult"),
+            "num_children": sum(1 for p in descriptor["people"] if p["kind"] == "child"),
+        },
         "region_name": REGION_NAME_BY_CODE[payload.region],
+        "state_name": REGION_NAME_BY_CODE[payload.region],
         "totals": {
             "market_income": base["market_income"],
             "net_income": base["net_income"],
+            "net_resources": base["net_income"],
+            "core_support": base["total_benefits"],
+            "taxes": base["total_tax"],
             "net_after_housing": base["net_after_housing"],
             "total_benefits": base["total_benefits"],
             "total_tax": base["total_tax"],
@@ -494,13 +502,21 @@ def calculate_income_series(payload: HouseholdInput, *,
                 drivers = _build_cliff_drivers(prev, point)
         data.append({
             "earned_income": point["earned_income"],
+            # US-compatible field names (consumed by the ported frontend / cliffReport):
+            "net_resources": point["net_income"],
+            "core_support": point["total_benefits"],
+            "taxes": point["total_tax"],
+            "step_annual": eff_step,
+            # each benefit program as a top-level key for the stacked area chart
+            **point["benefits"],
+            # UK-native extras (kept for our own API consumers):
             "net_income": point["net_income"],
             "net_after_housing": point["net_after_housing"],
             "market_income": point["market_income"],
             "total_benefits": point["total_benefits"],
             "total_tax": point["total_tax"],
-            "benefits": point["benefits"],
-            "taxes": point["taxes"],
+            "benefit_components": point["benefits"],
+            "tax_components": point["taxes"],
             "net_change_annual": net_change,
             "effective_marginal_rate": emtr,
             "marginal_rate_pct": round(emtr * 100, 1),
@@ -519,7 +535,10 @@ def calculate_income_series(payload: HouseholdInput, *,
         "requested_max_earned_income": max_earned_income,
         "point_count": len(data),
         "max_net_income": max((d["net_income"] for d in data), default=0),
+        "max_net_resources": max((d["net_resources"] for d in data), default=0),
         "max_marginal_rate_pct": max((d["marginal_rate_pct"] for d in data), default=0),
+        "truncated": False,
+        "truncation_reason": None,
     }
 
 
@@ -535,6 +554,7 @@ def calculate_region_comparison(payload: HouseholdInput) -> dict[str, Any]:
             "region": region["code"],
             "region_name": region["name"],
             "net_income_annual": point["net_income"],
+            "net_resources_annual": point["net_income"],
             "net_income_monthly": round(point["net_income"] / 12, 2),
             "net_after_housing_annual": point["net_after_housing"],
             "total_benefits_annual": point["total_benefits"],
@@ -552,20 +572,29 @@ def calculate_household_types(payload: HouseholdInput) -> dict[str, Any]:
     for template in HOUSEHOLD_TYPES:
         scenario = replace(payload, household_type=template["id"], people=())
         point = _simulate_point(scenario)
+        people = _resolved_people(scenario)
         results.append({
             "household_type": template["id"],
             "label": template["label"],
             "short_label": template["short_label"],
             "description": template["description"],
             "net_income_annual": point["net_income"],
+            "net_resources_annual": point["net_income"],
+            "net_resources_monthly": round(point["net_income"] / 12, 2),
             "net_income_monthly": round(point["net_income"] / 12, 2),
             "total_benefits_annual": point["total_benefits"],
+            "core_support_annual": point["total_benefits"],
             "total_tax_annual": point["total_tax"],
+            "counts": {
+                "num_adults": sum(1 for p in people if p["kind"] == "adult"),
+                "num_children": sum(1 for p in people if p["kind"] == "child"),
+            },
         })
     ranked = sorted(results, key=lambda r: (-r["net_income_annual"], r["label"]))
     for index, item in enumerate(ranked, start=1):
         item["rank"] = index
     return {"households": ranked,
+            "max_net_resources": max((r["net_income_annual"] for r in ranked), default=0),
             "max_net_income": max((r["net_income_annual"] for r in ranked), default=0)}
 
 
