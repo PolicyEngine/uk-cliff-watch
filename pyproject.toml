@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "uk-cliff-watch"
+version = "0.1.0"
+description = "Dynamic benefit-cliff and marginal-rate explorer for UK households, built on PolicyEngine-UK."
+requires-python = ">=3.11"
+dependencies = [
+    "policyengine-uk>=2.88.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+uk-cliff-watch-dev-server = "uk_cliff_watch.dev_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["uk_cliff_watch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

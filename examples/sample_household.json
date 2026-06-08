@@ -1,0 +1,12 @@
+{
+  "region": "NORTH_WEST",
+  "earned_income": 0,
+  "year": 2026,
+  "rent_annual": 9000,
+  "is_renting": true,
+  "people": [
+    { "kind": "adult", "age": 35 },
+    { "kind": "child", "age": 4 },
+    { "kind": "child", "age": 7 }
+  ]
+}

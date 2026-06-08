@@ -1,0 +1,22 @@
+{
+  "name": "uk-cliff-watch-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^16",
+    "react": "^19",
+    "react-dom": "^19",
+    "recharts": "^2.10"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "postcss": "^8",
+    "tailwindcss": "^4"
+  }
+}

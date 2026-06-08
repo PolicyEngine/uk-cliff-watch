@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd frontend && npm install",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/out",
+  "functions": {
+    "api/calculate.py":  { "maxDuration": 60 },
+    "api/series.py":     { "maxDuration": 60 },
+    "api/regions.py":    { "maxDuration": 60 },
+    "api/households.py": { "maxDuration": 60 },
+    "api/metadata.py":   { "maxDuration": 10 }
+  }
+}
