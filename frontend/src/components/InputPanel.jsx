@@ -1,24 +1,25 @@
-import { useState } from 'react'
-import {
-  hasCompleteRequiredInputs,
-  hasValidAge,
-} from '../dataLookup.js'
+import { useMemo, useState } from 'react'
+import { hasCompleteRequiredInputs, hasValidAge } from '../dataLookup.js'
+import { WizardOptionCard, WizardProgress } from 'policyengine-household-wizard'
 
-const MIN_ADULT_AGE = 16
+const MIN_ADULT_AGE = 18
 const MAX_AGE = 120
 
-function newPerson(kind) {
-  return {
-    kind,
-    age: kind === 'adult' ? MIN_ADULT_AGE : 0,
-  }
+const clampAdultAge = (age) => {
+  if (age === '' || age === null || age === undefined) return ''
+  const normalized = Number(age)
+  return Number.isFinite(normalized)
+    ? Math.min(MAX_AGE, Math.max(MIN_ADULT_AGE, normalized))
+    : ''
 }
 
-function clampAge(age, minimum = 0) {
-  if (age === '' || age === null || age === undefined) return ''
-  const n = Number(age)
-  return Number.isFinite(n) ? Math.min(MAX_AGE, Math.max(minimum, n)) : ''
-}
+const WIZARD_STEPS = [
+  { id: 'location', label: 'Region' },
+  { id: 'household', label: 'Household' },
+  { id: 'adults', label: 'Adults' },
+  { id: 'dependents', label: 'Children' },
+  { id: 'review', label: 'Review' },
+]
 
 function InfoTooltip({ text }) {
   return (
@@ -29,15 +30,7 @@ function InfoTooltip({ text }) {
   )
 }
 
-function GBPField({
-  id,
-  label,
-  value,
-  onChange,
-  compact = false,
-  step = 500,
-  tooltip,
-}) {
+function CurrencyField({ id, label, value, onChange, compact = false, step = 500, tooltip }) {
   const input = (
     <input
       type="number"
@@ -48,7 +41,6 @@ function GBPField({
       onChange={(event) => onChange(Number(event.target.value) || 0)}
     />
   )
-
   if (compact) {
     return (
       <label className="compact-field">
@@ -57,7 +49,6 @@ function GBPField({
       </label>
     )
   }
-
   return (
     <div className="form-group">
       <label htmlFor={id}>
@@ -69,74 +60,140 @@ function GBPField({
   )
 }
 
-function InputPanel({
-  metadata,
-  inputs,
-  loading,
-  onCalculate,
-  onInputsChange,
-  onReset,
-}) {
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, onReset }) {
+  const [currentStepId, setCurrentStepId] = useState('location')
 
   const people = inputs?.people || []
-  const adultMembers = people
-    .map((person, index) => ({ person, index }))
-    .filter(({ person }) => person.kind === 'adult')
-  const childMembers = people
-    .map((person, index) => ({ person, index }))
-    .filter(({ person }) => person.kind === 'child')
-
+  const adultCount = people.filter((person) => person.kind === 'adult').length
+  const dependentCount = people.filter((person) => person.kind === 'child').length
+  const isCouple = adultCount >= 2
+  const canCalculate = hasCompleteRequiredInputs(inputs)
+  const currentStepIndex = Math.max(0, WIZARD_STEPS.findIndex((step) => step.id === currentStepId))
   const maxAdults = Math.max(1, Number(metadata?.defaults?.max_adults) || 2)
   const maxDependents = Math.max(0, Number(metadata?.defaults?.max_dependents) || 6)
-  const adultCount = adultMembers.length
-  const childCount = childMembers.length
+  const regions = metadata?.regions || []
+  const presets = metadata?.presets || []
+  const selectedRegion = regions.find((region) => region.code === inputs?.region)
+  const regionName = selectedRegion?.name || inputs?.region || 'Missing'
 
-  const canCalculate = hasCompleteRequiredInputs(inputs)
+  const rowMeta = useMemo(() => {
+    let adultOrdinal = 0
+    let dependentOrdinal = 0
+    return people.map((person) => {
+      if (person.kind === 'child') {
+        dependentOrdinal += 1
+        return { ordinal: dependentOrdinal, label: `Child ${dependentOrdinal}` }
+      }
+      adultOrdinal += 1
+      return {
+        ordinal: adultOrdinal,
+        label: adultOrdinal === 1
+          ? 'Adult 1'
+          : adultOrdinal === 2 && isCouple
+            ? 'Adult 2 (partner)'
+            : `Adult ${adultOrdinal}`,
+      }
+    })
+  }, [isCouple, people])
 
-  // ——— helpers to mutate inputs ———
-
-  const updateField = (field, value) => {
-    onInputsChange({ ...inputs, [field]: value })
-  }
-
-  const updatePerson = (index, partial) => {
-    const nextPeople = people.map((p, i) => (i === index ? { ...p, ...partial } : p))
-    onInputsChange({ ...inputs, people: nextPeople })
-  }
+  const update = (partial) => onInputsChange({ ...inputs, ...partial })
+  const setRegion = (code) => update({ region: code })
+  const setPeople = (nextPeople) => update({ people: nextPeople })
 
   const addPerson = (kind) => {
     if (kind === 'adult' && adultCount >= maxAdults) return
-    if (kind === 'child' && childCount >= maxDependents) return
-    onInputsChange({ ...inputs, people: [...people, newPerson(kind)] })
+    if (kind === 'child' && dependentCount >= maxDependents) return
+    setPeople([...people, { kind, age: kind === 'adult' ? 30 : '' }])
   }
 
   const removePerson = (index) => {
-    const nextPeople = people.filter((_, i) => i !== index)
-    onInputsChange({ ...inputs, people: nextPeople })
+    setPeople(people.filter((_, position) => position !== index))
+  }
+
+  const updatePersonAge = (index, value) => {
+    setPeople(people.map((person, position) => (
+      position === index ? { ...person, age: value } : person
+    )))
+  }
+
+  const chooseHousehold = (couple) => {
+    const adults = people.filter((person) => person.kind === 'adult')
+    const children = people.filter((person) => person.kind === 'child')
+    let nextAdults = adults
+    if (couple) {
+      while (nextAdults.length < 2) nextAdults = [...nextAdults, { kind: 'adult', age: 30 }]
+      nextAdults = nextAdults.slice(0, 2)
+    } else {
+      nextAdults = adults.length ? [adults[0]] : [{ kind: 'adult', age: 30 }]
+    }
+    setPeople([...nextAdults, ...children])
+    goToStep('adults')
+  }
+
+  const chooseNoDependents = () => {
+    setPeople(people.filter((person) => person.kind !== 'child'))
+    goToStep('review')
   }
 
   const applyPreset = (preset) => {
-    if (!metadata) return
     const payload = preset.payload || {}
-    // Merge preset fields into fresh inputs from defaults
     onInputsChange({
-      ...(inputs || {}),
-      region: payload.region || inputs?.region || '',
-      people: Array.isArray(payload.people) ? payload.people : (inputs?.people || []),
-      rent_annual: Number(payload.rent_annual) || 0,
-      childcare_expenses_annual: Number(payload.childcare_expenses_annual) || 0,
-      is_renting: payload.is_renting !== undefined ? Boolean(payload.is_renting) : true,
-      chart_max_earned_income:
-        inputs?.chart_max_earned_income
-        || metadata?.defaults?.chart_max_earned_income
-        || 130000,
-      year: metadata?.year || 2026,
+      year: 2026,
+      region: payload.region,
+      rent_annual: payload.rent_annual ?? 0,
+      childcare_expenses_annual: payload.childcare_expenses_annual ?? 0,
+      is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
+      chart_max_earned_income: inputs?.chart_max_earned_income
+        || metadata?.defaults?.chart_max_earned_income || 130000,
+      people: (payload.people || []).map((person) => ({ kind: person.kind, age: person.age })),
     })
+    goToStep('review')
   }
 
-  const regions = metadata?.regions || []
-  const presets = metadata?.presets || []
+  const adultMembers = people
+    .map((person, index) => ({ person, index, meta: rowMeta[index] }))
+    .filter(({ person }) => person.kind === 'adult')
+  const dependentMembers = people
+    .map((person, index) => ({ person, index, meta: rowMeta[index] }))
+    .filter(({ person }) => person.kind === 'child')
+
+  const locationStepComplete = Boolean(inputs?.region)
+  const adultStepComplete = adultMembers.length > 0
+    && adultMembers.every(({ person }) => hasValidAge(person.age))
+  const dependentStepComplete = dependentMembers.every(({ person }) => hasValidAge(person.age))
+  const currentStepComplete = {
+    location: locationStepComplete,
+    household: adultCount >= 1,
+    adults: adultStepComplete,
+    dependents: dependentStepComplete,
+    review: canCalculate,
+  }[currentStepId]
+  const isFirstStep = currentStepIndex === 0
+  const isLastStep = currentStepIndex >= WIZARD_STEPS.length - 1
+
+  function goToStep(stepId) {
+    if (WIZARD_STEPS.some((step) => step.id === stepId)) setCurrentStepId(stepId)
+  }
+
+  const goBack = () => {
+    if (isFirstStep) return
+    setCurrentStepId(WIZARD_STEPS[currentStepIndex - 1].id)
+  }
+
+  const goNext = () => {
+    if (isLastStep) return
+    if (currentStepId === 'adults') {
+      setPeople(people.map((person) => (
+        person.kind === 'adult' ? { ...person, age: clampAdultAge(person.age) } : person
+      )))
+    }
+    setCurrentStepId(WIZARD_STEPS[currentStepIndex + 1].id)
+  }
+
+  const resetWizard = () => {
+    onReset()
+    goToStep('location')
+  }
 
   if (!metadata || !inputs) {
     return (
@@ -150,270 +207,331 @@ function InputPanel({
   return (
     <section className="input-panel">
       <h2>Household information</h2>
-
-      {/* ——— Preset buttons ——— */}
-      {presets.length > 0 ? (
-        <div className="wizard-step" style={{ marginBottom: '0.75rem' }}>
-          <div className="wizard-step-heading">
-            <p>Load a preset household or fill in the details below.</p>
-          </div>
-          <div className="wizard-option-grid">
-            {presets.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="wizard-option-card"
-                onClick={() => applyPreset(preset)}
-              >
-                <div className="wizard-option-title">{preset.label}</div>
-                {preset.tagline ? (
-                  <div className="wizard-option-description">{preset.tagline}</div>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
+      <WizardProgress
+        totalSteps={WIZARD_STEPS.length}
+        currentStepIndex={currentStepIndex}
+        currentStepLabel={WIZARD_STEPS[currentStepIndex]?.label}
+        aria-label="Household setup progress"
+      />
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          if (!canCalculate) return
-          onCalculate()
+          if (!currentStepComplete) return
+          if (isLastStep) {
+            if (!canCalculate) return
+            onCalculate()
+            return
+          }
+          goNext()
         }}
       >
-        {/* ——— Region ——— */}
-        <div className="form-group" style={{ marginBottom: '0.85rem' }}>
-          <label htmlFor="region">Region</label>
-          <select
-            id="region"
-            value={inputs.region || ''}
-            onChange={(event) => updateField('region', event.target.value)}
-          >
-            <option value="">Select a region…</option>
-            {regions.map((r) => (
-              <option key={r.code} value={r.code}>{r.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* ——— Household members ——— */}
-        <div className="member-section" style={{ marginBottom: '0.85rem' }}>
-          {/* Adults */}
-          <div className="member-subsection" style={{ marginBottom: '0.75rem' }}>
-            <div className="member-subsection-header">
-              <div>
-                <div className="member-subsection-title">Adults</div>
-                <div className="member-subsection-copy">{adultCount} of {maxAdults}</div>
-              </div>
-              <button
-                type="button"
-                className="member-add-btn"
-                onClick={() => addPerson('adult')}
-                disabled={adultCount >= maxAdults}
-                title={adultCount >= maxAdults ? `Up to ${maxAdults} adults supported.` : 'Add adult'}
-              >
-                Add adult
-              </button>
+        {currentStepId === 'location' ? (
+          <section className="wizard-step">
+            <div className="wizard-step-heading">
+              <h3>Where does the household live?</h3>
+              <p>Choose a UK region, or load a ready-made scenario.</p>
             </div>
-
-            <div className="adult-card-grid">
-              {adultMembers.map(({ person, index }, ordinal) => (
-                <div key={`adult-${index}`} className="adult-card">
-                  <div className="adult-card-header">
-                    <div className="adult-card-title">
-                      {ordinal === 0 ? 'Adult 1' : `Adult ${ordinal + 1}`}
-                    </div>
-                    <button
-                      type="button"
-                      className="member-chip-remove"
-                      onClick={() => removePerson(index)}
-                      aria-label={`Remove Adult ${ordinal + 1}`}
-                      disabled={adultCount <= 1}
-                    >
-                      Remove
-                    </button>
+            {presets.length ? (
+              <div className="wizard-option-grid">
+                {presets.map((preset) => (
+                  <WizardOptionCard
+                    key={preset.id}
+                    selected={false}
+                    title={preset.label}
+                    description={preset.tagline || preset.description}
+                    onClick={() => applyPreset(preset)}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <div className="form-grid form-grid--single">
+              <div className="form-group">
+                <label htmlFor="region">Region</label>
+                <select
+                  id="region"
+                  required
+                  value={inputs.region || ''}
+                  onChange={(event) => setRegion(event.target.value)}
+                  aria-label="Region"
+                >
+                  <option value="" disabled>Select a region</option>
+                  {regions.map((region) => (
+                    <option key={region.code} value={region.code}>{region.name}</option>
+                  ))}
+                </select>
+                {selectedRegion ? (
+                  <div className="zip-state-result" role="status" aria-live="polite">
+                    <span>Region</span>
+                    <strong>{selectedRegion.name}</strong>
                   </div>
-                  <div className="person-card-fields person-card-fields--dependent">
-                    <label className="compact-field">
-                      <span>Age</span>
-                      <input
-                        type="number"
-                        aria-label={`Adult ${ordinal + 1} age`}
-                        min={MIN_ADULT_AGE}
-                        max={MAX_AGE}
-                        step="1"
-                        required
-                        value={person.age}
-                        onChange={(event) =>
-                          updatePerson(index, {
-                            age: event.target.value === ''
-                              ? ''
-                              : clampAge(event.target.value, MIN_ADULT_AGE),
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Children */}
-          <div className="member-subsection">
-            <div className="member-subsection-header">
-              <div>
-                <div className="member-subsection-title">Children</div>
-                <div className="member-subsection-copy">{childCount} of {maxDependents}</div>
+                ) : null}
               </div>
-              <button
-                type="button"
-                className="member-add-btn"
-                onClick={() => addPerson('child')}
-                disabled={childCount >= maxDependents}
-                title={childCount >= maxDependents ? `Up to ${maxDependents} children supported.` : 'Add child'}
-              >
-                Add child
-              </button>
             </div>
+          </section>
+        ) : null}
 
-            {childMembers.length === 0 ? (
-              <div className="member-empty-state">
-                <div className="member-empty-state-title">No children</div>
-                <div className="member-empty-state-copy">
-                  Click "Add child" to include a child in the household.
+        {currentStepId === 'household' ? (
+          <section className="wizard-step">
+            <div className="wizard-step-heading">
+              <h3>Single adult or a couple?</h3>
+              <p>We use this to decide whether to include a partner in the benefit unit.</p>
+            </div>
+            <div className="wizard-option-grid">
+              <WizardOptionCard
+                selected={!isCouple}
+                title="Single adult"
+                description="One adult in the benefit unit; the primary earner is the chart's earnings axis."
+                onClick={() => chooseHousehold(false)}
+              />
+              <WizardOptionCard
+                selected={isCouple}
+                title="Couple"
+                description="Adds a partner and models a joint benefit unit (Universal Credit, etc.)."
+                onClick={() => chooseHousehold(true)}
+              />
+            </div>
+          </section>
+        ) : null}
+
+        {currentStepId === 'adults' ? (
+          <section className="wizard-step member-section">
+            <div className="wizard-step-heading">
+              <h3>Who are the adults?</h3>
+              <p>Adult 1 is the earnings axis on the chart. Any partner&apos;s earnings stay fixed.</p>
+            </div>
+            <div className="member-subsection">
+              <div className="member-subsection-header">
+                <div>
+                  <div className="member-subsection-title">Adults</div>
+                  <div className="member-subsection-copy">{adultCount} of {maxAdults}</div>
                 </div>
+                <button
+                  type="button"
+                  className="member-add-btn"
+                  onClick={() => addPerson('adult')}
+                  disabled={adultCount >= maxAdults}
+                  title={adultCount >= maxAdults ? `This calculator supports up to ${maxAdults} adults.` : 'Add adult'}
+                >
+                  Add adult
+                </button>
               </div>
-            ) : (
-              <div className="dependent-card-grid">
-                {childMembers.map(({ person, index }, ordinal) => (
-                  <div key={`child-${index}`} className="dependent-card">
+              <div className="adult-card-grid">
+                {adultMembers.map(({ person, index, meta }) => (
+                  <div key={`adult-${index}`} className="adult-card">
                     <div className="adult-card-header">
-                      <div className="adult-card-title">Child {ordinal + 1}</div>
+                      <div className="adult-card-title">{meta?.label}</div>
                       <button
                         type="button"
                         className="member-chip-remove"
                         onClick={() => removePerson(index)}
-                        aria-label={`Remove Child ${ordinal + 1}`}
+                        aria-label={`Remove ${meta?.label}`}
+                        title={`Remove ${meta?.label}`}
+                        disabled={adultCount <= 1}
                       >
                         Remove
                       </button>
                     </div>
-                    <div className="person-card-fields person-card-fields--dependent">
+                    <div className="person-card-fields">
                       <label className="compact-field">
                         <span>Age</span>
                         <input
                           type="number"
-                          aria-label={`Child ${ordinal + 1} age`}
-                          min="0"
-                          max="17"
+                          aria-label={`${meta?.label} age`}
+                          min="16"
+                          max="120"
                           step="1"
                           required
                           value={person.age}
-                          onChange={(event) =>
-                            updatePerson(index, {
-                              age: event.target.value === '' ? '' : clampAge(event.target.value, 0),
-                            })
-                          }
+                          onChange={(event) => updatePersonAge(index, event.target.value)}
                         />
                       </label>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* ——— Tenure & Rent ——— */}
-        <div className="form-grid" style={{ marginBottom: '0.85rem' }}>
-          <div className="form-group">
-            <label id="is-renting-label">Tenure</label>
-            <button
-              type="button"
-              className={inputs.is_renting ? 'toggle-switch toggle-switch--on' : 'toggle-switch'}
-              role="switch"
-              aria-checked={Boolean(inputs.is_renting)}
-              aria-labelledby="is-renting-label is-renting-value"
-              onClick={() => updateField('is_renting', !inputs.is_renting)}
-            >
-              <span id="is-renting-value" className="toggle-switch-text">
-                {inputs.is_renting ? 'Renting' : 'Not renting'}
-              </span>
-              <span className="toggle-switch-track" aria-hidden="true">
-                <span className="toggle-switch-thumb" />
-              </span>
-            </button>
-          </div>
-
-          {inputs.is_renting ? (
-            <GBPField
-              id="rent_annual"
-              label="Annual rent"
-              step={500}
-              value={inputs.rent_annual}
-              onChange={(value) => updateField('rent_annual', value)}
-            />
-          ) : null}
-        </div>
-
-        {/* ——— Childcare costs ——— */}
-        {(inputs.people || []).some((p) => p.kind === 'child') ? (
-          <div className="form-grid form-grid--single" style={{ marginBottom: '0.85rem' }}>
-            <GBPField
-              id="childcare_expenses_annual"
-              label="Annual childcare costs"
-              step={500}
-              value={inputs.childcare_expenses_annual}
-              onChange={(value) => updateField('childcare_expenses_annual', value)}
-              tooltip="Registered childcare costs paid annually. Used for Tax-Free Childcare eligibility."
-            />
-          </div>
+            </div>
+          </section>
         ) : null}
 
-        {/* ——— Advanced ——— */}
-        <details
-          className="advanced-panel"
-          open={advancedOpen}
-          onToggle={(event) => setAdvancedOpen(event.target.open)}
-        >
-          <summary className="advanced-summary">Advanced settings</summary>
-          <div className="advanced-grid">
-            <section className="advanced-section">
-              <h3 className="advanced-section-title">Chart range</h3>
-              <div className="advanced-field-grid advanced-field-grid--two">
-                <GBPField
-                  id="chart_max_earned_income"
-                  label="Max earnings to chart"
-                  step={10000}
-                  value={inputs.chart_max_earned_income}
-                  onChange={(value) =>
-                    updateField('chart_max_earned_income', value || 130000)
-                  }
-                  tooltip="Upper bound for the earnings axis on the cliff chart."
+        {currentStepId === 'dependents' ? (
+          <section className="wizard-step member-section">
+            <div className="wizard-step-heading">
+              <h3>Any children?</h3>
+              <p>Add children whose benefits and tax credits should be included.</p>
+            </div>
+            {dependentMembers.length === 0 ? (
+              <div className="wizard-option-grid">
+                <WizardOptionCard
+                  selected={false}
+                  title="No children"
+                  description="Continue with adults only."
+                  onClick={chooseNoDependents}
+                />
+                <WizardOptionCard
+                  selected={false}
+                  title="Add a child"
+                  description="Start with a blank age; child ages drive Child Benefit, childcare and Universal Credit elements."
+                  onClick={() => addPerson('child')}
                 />
               </div>
-            </section>
-          </div>
-        </details>
+            ) : (
+              <div className="member-subsection">
+                <div className="member-subsection-header">
+                  <div>
+                    <div className="member-subsection-title">Children</div>
+                    <div className="member-subsection-copy">{dependentCount} of {maxDependents}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="member-add-btn"
+                    onClick={() => addPerson('child')}
+                    disabled={dependentCount >= maxDependents}
+                    title={dependentCount >= maxDependents ? `This calculator supports up to ${maxDependents} children.` : 'Add child'}
+                  >
+                    Add child
+                  </button>
+                </div>
+                <div className="dependent-card-grid">
+                  {dependentMembers.map(({ person, index, meta }) => (
+                    <div key={`dependent-${index}`} className="dependent-card">
+                      <div className="adult-card-header">
+                        <div className="adult-card-title">{meta?.label}</div>
+                        <button
+                          type="button"
+                          className="member-chip-remove"
+                          onClick={() => removePerson(index)}
+                          aria-label={`Remove ${meta?.label}`}
+                          title={`Remove ${meta?.label}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <div className="person-card-fields person-card-fields--dependent">
+                        <label className="compact-field">
+                          <span>Age</span>
+                          <input
+                            type="number"
+                            aria-label={`${meta?.label} age`}
+                            min="0"
+                            max="120"
+                            step="1"
+                            required
+                            value={person.age}
+                            onChange={(event) => updatePersonAge(index, event.target.value)}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        ) : null}
 
-        {/* ——— Actions ——— */}
+        {currentStepId === 'review' ? (
+          <section className="wizard-step">
+            <div className="wizard-step-heading">
+              <h3>Review and calculate</h3>
+              <p>Check the household, adjust costs if needed, then build the cliff chart.</p>
+            </div>
+            <div className="wizard-review-grid">
+              <button type="button" className="wizard-review-item" onClick={() => goToStep('location')}>
+                <span>Region</span>
+                <strong>{regionName}</strong>
+              </button>
+              <button type="button" className="wizard-review-item" onClick={() => goToStep('household')}>
+                <span>Household</span>
+                <strong>{isCouple ? 'Couple' : 'Single adult'}</strong>
+              </button>
+              <button type="button" className="wizard-review-item" onClick={() => goToStep('adults')}>
+                <span>Adults</span>
+                <strong>{adultCount} adult{adultCount === 1 ? '' : 's'}</strong>
+              </button>
+              <button type="button" className="wizard-review-item" onClick={() => goToStep('dependents')}>
+                <span>Children</span>
+                <strong>{dependentCount} child{dependentCount === 1 ? '' : 'ren'}</strong>
+              </button>
+            </div>
+
+            <details className="advanced-panel" open>
+              <summary className="advanced-summary">Housing, childcare &amp; chart range</summary>
+              <div className="advanced-grid">
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Housing</h3>
+                  <div className="advanced-field-grid advanced-field-grid--two">
+                    <div className="form-group">
+                      <label id="tenure-label">Tenure</label>
+                      <button
+                        type="button"
+                        className={inputs.is_renting ? 'toggle-switch toggle-switch--on' : 'toggle-switch'}
+                        role="switch"
+                        aria-checked={Boolean(inputs.is_renting)}
+                        aria-labelledby="tenure-label tenure-value"
+                        onClick={() => update({ is_renting: !inputs.is_renting })}
+                      >
+                        <span id="tenure-value" className="toggle-switch-text">
+                          {inputs.is_renting ? 'Renting' : 'Owner / no rent'}
+                        </span>
+                        <span className="toggle-switch-track" aria-hidden="true">
+                          <span className="toggle-switch-thumb" />
+                        </span>
+                      </button>
+                    </div>
+                    <CurrencyField
+                      id="rent_annual"
+                      label="Rent"
+                      value={inputs.rent_annual}
+                      onChange={(value) => update({ rent_annual: value })}
+                      tooltip="Annual rent. Drives Housing Benefit and the Universal Credit housing element."
+                    />
+                  </div>
+                </section>
+
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Childcare</h3>
+                  <div className="advanced-field-grid">
+                    <CurrencyField
+                      id="childcare_expenses_annual"
+                      label="Childcare costs"
+                      value={inputs.childcare_expenses_annual}
+                      onChange={(value) => update({ childcare_expenses_annual: value })}
+                    />
+                  </div>
+                </section>
+
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Chart</h3>
+                  <div className="advanced-field-grid">
+                    <CurrencyField
+                      id="chart_max_earned_income"
+                      label="Chart max earnings"
+                      step={10000}
+                      value={inputs.chart_max_earned_income}
+                      onChange={(value) => update({ chart_max_earned_income: value || 130000 })}
+                      tooltip="Upper bound for the earnings axis on the chart."
+                    />
+                  </div>
+                </section>
+              </div>
+            </details>
+          </section>
+        ) : null}
+
         <div className="form-actions">
-          <button
-            type="button"
-            className="reset-btn"
-            onClick={onReset}
-          >
-            Reset
-          </button>
+          <button type="button" className="reset-btn" onClick={resetWizard}>Reset</button>
+          <button type="button" className="reset-btn" onClick={goBack} disabled={isFirstStep}>Back</button>
           <button
             type="submit"
             className="calculate-btn"
-            disabled={loading || !canCalculate}
-            title={!canCalculate ? 'Complete required fields to continue.' : undefined}
+            disabled={loading || !currentStepComplete}
+            title={!currentStepComplete ? 'Complete this step to continue.' : undefined}
           >
-            {loading ? 'Building chart...' : canCalculate ? 'Find cliffs' : 'Complete required fields'}
+            {loading
+              ? 'Building chart...'
+              : isLastStep
+                ? canCalculate ? 'Find cliffs' : 'Complete required fields'
+                : 'Continue'}
           </button>
         </div>
       </form>
