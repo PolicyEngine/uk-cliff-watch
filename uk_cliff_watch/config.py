@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 DEFAULT_YEAR = 2026
-DEFAULT_SERIES_MAX_EARNINGS = 80_000
+# Sweep to £130k so the £100k–£125,140 personal-allowance trap is on the curve.
+DEFAULT_SERIES_MAX_EARNINGS = 130_000
 DEFAULT_SERIES_STEP = 500
 DEFAULT_CLIFF_DELTA = 1_000
 DEFAULT_SERIES_EARNINGS_BUFFER = 20_000
-DEFAULT_SERIES_MIN_EARNINGS_WINDOW = 60_000
-DEFAULT_SERIES_TARGET_POINTS = 161
+DEFAULT_SERIES_MIN_EARNINGS_WINDOW = 80_000
+DEFAULT_SERIES_TARGET_POINTS = 281
 DEFAULT_SERIES_STEP_INCREMENT = 250
 MAX_ADULTS = 2
 MAX_DEPENDENTS = 6
@@ -171,3 +172,95 @@ HOUSEHOLD_TYPES = [
     },
 ]
 HOUSEHOLD_TYPE_BY_ID = {item["id"]: item for item in HOUSEHOLD_TYPES}
+
+
+# One-click scenarios for the dashboard. Each `payload` is a ready-to-send
+# HouseholdPayload that seeds every control at once.
+PRESETS = [
+    {
+        "id": "uc_taper",
+        "label": "Universal Credit taper",
+        "tagline": "Lone parent, 2 children, renting",
+        "description": (
+            "A lone parent with two young children renting in the North West. The "
+            "Universal Credit 55% taper stacks on Income Tax and National Insurance "
+            "to create a flat ~68% marginal-rate wall across most of the earnings range."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 0,
+            "rent_annual": 9000,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 35},
+                {"kind": "child", "age": 4},
+                {"kind": "child", "age": 7},
+            ],
+        },
+    },
+    {
+        "id": "hundred_k_trap",
+        "label": "The £100k trap",
+        "tagline": "Single earner, 2 children",
+        "description": (
+            "A single earner with two school-age children. Watch the marginal rate "
+            "jump to ~54% as Child Benefit is clawed back above £60k, then to ~62% in "
+            "the £100,000–£125,140 personal-allowance trap where the tax-free allowance "
+            "is withdrawn."
+        ),
+        "payload": {
+            "region": "SOUTH_EAST",
+            "earned_income": 100000,
+            "rent_annual": 0,
+            "childcare_expenses_annual": 0,
+            "is_renting": False,
+            "people": [
+                {"kind": "adult", "age": 40},
+                {"kind": "child", "age": 8},
+                {"kind": "child", "age": 11},
+            ],
+        },
+    },
+    {
+        "id": "couple_2_kids",
+        "label": "Couple, 2 children",
+        "tagline": "One earner, renting",
+        "description": (
+            "A couple with two children, one primary earner, renting in the North "
+            "West — the household type most exposed to the Universal Credit taper."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 30000,
+            "rent_annual": 9000,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 35},
+                {"kind": "adult", "age": 35},
+                {"kind": "child", "age": 4},
+                {"kind": "child", "age": 7},
+            ],
+        },
+    },
+    {
+        "id": "single_no_kids",
+        "label": "Single adult",
+        "tagline": "No children, renting",
+        "description": (
+            "A single working-age adult with no children, renting — the baseline "
+            "case with a much smaller benefit footprint."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 20000,
+            "rent_annual": 7200,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 30},
+            ],
+        },
+    },
+]

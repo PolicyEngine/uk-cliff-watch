@@ -14,5 +14,9 @@ frontend/out/
 frontend/node_modules/
 .vercel/
 
+# Playwright e2e artifacts
+frontend/check-*.png
+test-results/
+
 # OS
 .DS_Store

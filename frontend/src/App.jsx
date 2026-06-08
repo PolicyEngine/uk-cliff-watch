@@ -62,8 +62,27 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState('net_income');
+  const [activePreset, setActivePreset] = useState('uc_taper');
 
   const debounceRef = useRef(null);
+
+  function applyPreset(preset) {
+    setActivePreset(preset.id);
+    setPayload({
+      year: 2026,
+      region: preset.payload.region,
+      earned_income: preset.payload.earned_income ?? 0,
+      rent_annual: preset.payload.rent_annual ?? 0,
+      childcare_expenses_annual: preset.payload.childcare_expenses_annual ?? 0,
+      is_renting: preset.payload.is_renting ?? (preset.payload.rent_annual ?? 0) > 0,
+      people: (preset.payload.people ?? []).map((p) => ({ kind: p.kind, age: p.age })),
+    });
+  }
+
+  function handlePanelChange(next) {
+    setActivePreset(null); // manual edit deselects the preset
+    setPayload(next);
+  }
 
   // Fetch metadata once on mount
   useEffect(() => {
@@ -89,7 +108,7 @@ export default function App() {
       try {
         const seriesPayload = {
           ...payload,
-          max_earned_income: metadata?.defaults?.series_max_earned_income ?? 80000,
+          max_earned_income: metadata?.defaults?.series_max_earned_income ?? 130000,
           step: metadata?.defaults?.series_step ?? 500,
         };
 
@@ -221,11 +240,53 @@ export default function App() {
             }}
           >
             {/* Left: inputs */}
-            <div style={{ position: 'sticky', top: '1.5rem' }}>
+            <div style={{ position: 'sticky', top: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {Array.isArray(metadata.presets) && metadata.presets.length > 0 && (
+                <div
+                  style={{
+                    background: PALETTE.white,
+                    border: `1px solid ${PALETTE.border}`,
+                    borderRadius: 8,
+                    padding: '1rem',
+                  }}
+                >
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: PALETTE.muted, marginBottom: '0.6rem' }}>
+                    Scenarios
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {metadata.presets.map((preset) => {
+                      const active = activePreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => applyPreset(preset)}
+                          title={preset.description}
+                          style={{
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            border: `1px solid ${active ? PALETTE.primary : PALETTE.border}`,
+                            background: active ? PALETTE.primary : PALETTE.white,
+                            color: active ? '#fff' : PALETTE.text,
+                            borderRadius: 8,
+                            padding: '0.55rem 0.7rem',
+                            transition: 'all 0.12s ease',
+                          }}
+                        >
+                          <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{preset.label}</div>
+                          <div style={{ fontSize: '0.75rem', color: active ? 'rgba(255,255,255,0.85)' : PALETTE.muted }}>
+                            {preset.tagline}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <InputPanel
                 metadata={metadata}
                 payload={payload}
-                onChange={setPayload}
+                onChange={handlePanelChange}
                 loading={loading}
               />
             </div>
