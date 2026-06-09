@@ -132,6 +132,11 @@ const CLIFF_HIGHLIGHT_STYLES = {
   },
 }
 
+const NOTCH_DOT_STYLE = {
+  stroke: '#059669',
+  dotFill: '#10B981',
+}
+
 const DEFAULT_HOUSEHOLD_COST_DEFINITIONS = []
 
 function getHouseholdCostDefinitions(metadata) {
@@ -227,6 +232,7 @@ function BenefitChart({
   const [netVisibleKeys, setNetVisibleKeys] = useState({})
   const [detailVisibleKeys, setDetailVisibleKeys] = useState({})
   const [showCliffHighlights, setShowCliffHighlights] = useState(true)
+  const [showNotchHighlights, setShowNotchHighlights] = useState(true)
   const [showMtr, setShowMtr] = useState(false)
   const hasRealData = Boolean(data?.length)
   const householdCostDefinitions = useMemo(
@@ -393,6 +399,9 @@ function BenefitChart({
 
   const cliffReport = useMemo(() => buildCliffReport(annualizedData), [annualizedData])
   const highlightedCliffs = cliffReport.cliffs || []
+  const notchPoints = useMemo(() => (
+    annualizedData.filter((point) => point?.is_notch)
+  ), [annualizedData])
   const reportableCliffKeys = useMemo(() => (
     new Set(
       highlightedCliffs.map((cliff) => (
@@ -571,6 +580,11 @@ function BenefitChart({
               <span>{tooltipCliff.kind === 'upcoming' ? 'Cliff on next step' : 'Cliff loss at this step'}</span>
               <span>{fmt(-tooltipCliff.dropAnnual)}/yr</span>
             </div>
+          ) : point.is_notch ? (
+            <div className="chart-tooltip-row" style={{ color: '#059669' }}>
+              <span>Notch gain (benefit-cap exemption)</span>
+              <span>+{fmt(point.notch_gain_annual)}/yr</span>
+            </div>
           ) : point.has_previous_point ? (
             <div className="chart-tooltip-row">
               <span>Change vs prior point</span>
@@ -745,6 +759,25 @@ function BenefitChart({
               }}
             />
             <span>Cliff highlights</span>
+          </button>
+        ) : null}
+        {notchPoints.length ? (
+          <button
+            type="button"
+            className={`chart-toggle ${showNotchHighlights ? 'active' : ''}`}
+            onClick={() => setShowNotchHighlights((current) => !current)}
+            style={{
+              '--legend-stroke': NOTCH_DOT_STYLE.stroke,
+            }}
+          >
+            <span
+              className="chart-legend-swatch chart-legend-swatch--dot"
+              style={{
+                '--legend-stroke': NOTCH_DOT_STYLE.stroke,
+                '--legend-fill': NOTCH_DOT_STYLE.dotFill,
+              }}
+            />
+            <span>Notch (benefit-cap exemption)</span>
           </button>
         ) : null}
         <button
@@ -955,6 +988,23 @@ function BenefitChart({
                   />
                 )
               })
+              : null}
+
+            {showNotchHighlights && chartMode === 'net_income'
+              ? notchPoints.map((point) => (
+                <ReferenceDot
+                  key={`notch-dot-${point.earned_income_annual}`}
+                  yAxisId="left"
+                  x={point.earned_income_annual}
+                  y={point.net_resources_annual}
+                  r={5.5}
+                  fill={NOTCH_DOT_STYLE.dotFill}
+                  stroke="#ffffff"
+                  strokeWidth={2.25}
+                  ifOverflow="extendDomain"
+                  isFront
+                />
+              ))
               : null}
           </ComposedChart>
         </ResponsiveContainer>
