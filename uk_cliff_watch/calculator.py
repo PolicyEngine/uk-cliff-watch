@@ -79,6 +79,15 @@ class HouseholdInput:
     childcare_expenses_annual: float = 0.0
     is_renting: bool = True
     savings: float = 0.0  # household capital — the £16k UC cliff
+    # Second adult's earnings (only meaningful for couples). The first adult's
+    # earnings are the chart axis; the partner's stay fixed at this value.
+    partner_earnings: float = 0.0
+    # Non-employment income on the primary adult.
+    pension_income: float = 0.0  # private/occupational pension — drives Pension Credit
+    self_employment_income: float = 0.0
+    # Other unearned income (savings interest, dividends, property). Modelled as
+    # savings interest for simplicity; documented for the UI.
+    other_unearned_income: float = 0.0
     council_tax_band: str = DEFAULT_COUNCIL_TAX_BAND  # drives the Council Tax line
     student_loan_plan: str = "NONE"  # applies to primary earner (adult-0)
 
@@ -266,11 +275,31 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             # Primary earner: either a fixed value or the axis sweep.
             if not vary_income:
                 person_data["employment_income"] = {year: float(payload.earned_income)}
+            # Non-employment income sits on the primary adult.
+            if payload.pension_income > 0:
+                person_data["private_pension_income"] = {
+                    year: _nonnegative(payload.pension_income)
+                }
+            if payload.self_employment_income > 0:
+                person_data["self_employment_income"] = {
+                    year: _nonnegative(payload.self_employment_income)
+                }
+            if payload.other_unearned_income > 0:
+                # Simplest reasonable mapping: treat "other unearned income" as
+                # taxable savings interest. Documented in the UI accordingly.
+                person_data["savings_interest_income"] = {
+                    year: _nonnegative(payload.other_unearned_income)
+                }
             # Student loan — only on the primary earner (adult-0).
             plan = (payload.student_loan_plan or "NONE").upper()
             if plan != "NONE":
                 person_data["has_student_loan"] = {year: True}
                 person_data["student_loan_plan"] = {year: plan}
+        elif person["kind"] == "adult":
+            # Second adult (partner): earnings stay fixed at partner_earnings.
+            person_data["employment_income"] = {
+                year: _nonnegative(payload.partner_earnings)
+            }
         else:
             person_data["employment_income"] = {year: 0.0}
         if person["kind"] == "child" and childcare_per_child > 0:
@@ -472,6 +501,10 @@ def calculate_household(payload: HouseholdInput, *, delta: int = DEFAULT_CLIFF_D
             "year": payload.year,
             "rent_annual": payload.rent_annual,
             "childcare_expenses_annual": payload.childcare_expenses_annual,
+            "partner_earnings": payload.partner_earnings,
+            "pension_income": payload.pension_income,
+            "self_employment_income": payload.self_employment_income,
+            "other_unearned_income": payload.other_unearned_income,
             "council_tax_band": payload.council_tax_band,
             "people": [
                 {"kind": p["kind"], "age": p["age"], "is_disabled": p["is_disabled"]}
@@ -774,6 +807,10 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
         childcare_expenses_annual=numeric("childcare_expenses_annual"),
         is_renting=bool(data.get("is_renting", numeric("rent_annual") > 0)),
         savings=numeric("savings"),
+        partner_earnings=numeric("partner_earnings"),
+        pension_income=numeric("pension_income"),
+        self_employment_income=numeric("self_employment_income"),
+        other_unearned_income=numeric("other_unearned_income"),
         council_tax_band=str(data.get("council_tax_band") or DEFAULT_COUNCIL_TAX_BAND).upper(),
         student_loan_plan=str(data.get("student_loan_plan") or "NONE").upper(),
     )

@@ -340,6 +340,30 @@ PRESETS = [
         },
     },
     {
+        "id": "pension_credit",
+        "label": "Pensioner on Pension Credit",
+        "tagline": "Retired couple, small private pension",
+        "description": (
+            "A retired couple, both aged 68, with a small private pension and no "
+            "earnings. Means-tested Pension Credit tops up their income; each extra "
+            "pound of private pension withdraws Pension Credit pound-for-pound, a "
+            "100% marginal rate that the earnings chart and the pension-income input "
+            "now make visible."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 0,
+            "rent_annual": 0,
+            "childcare_expenses_annual": 0,
+            "is_renting": False,
+            "pension_income": 3000,
+            "people": [
+                {"kind": "adult", "age": 68},
+                {"kind": "adult", "age": 68},
+            ],
+        },
+    },
+    {
         "id": "single_no_kids",
         "label": "Single adult",
         "tagline": "No children, renting",
