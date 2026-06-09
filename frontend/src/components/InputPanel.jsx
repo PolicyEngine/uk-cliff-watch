@@ -21,13 +21,14 @@ const WIZARD_STEPS = [
   { id: 'review', label: 'Review' },
 ]
 
-// Person flags. Disabled/Blind/Needs care map to real policyengine-uk inputs;
-// Student is carried for parity with limited modelling.
+// Person flags. Disabled/Blind map to real policyengine-uk inputs.
+// Student is carried for parity (no UK PE input currently).
+// "Needs care" (is_severely_disabled / is_incapable_of_self_care) was removed:
+// it had no formula in policyengine-uk and always returned £0 silently.
 const PERSON_FLAGS = [
   { key: 'is_disabled', label: 'Disabled' },
   { key: 'is_blind', label: 'Blind' },
   { key: 'is_full_time_student', label: 'Student' },
-  { key: 'is_incapable_of_self_care', label: 'Needs care' },
 ]
 
 function PersonFlagGrid({ person, updatePerson }) {

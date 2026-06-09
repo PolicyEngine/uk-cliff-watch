@@ -68,13 +68,6 @@ BENEFIT_COMPONENTS = [
         "description": "Legacy Housing Benefit for renters not on Universal Credit.",
     },
     {
-        "key": "council_tax_benefit",
-        "variable": "council_tax_benefit",
-        "label": "Council Tax Reduction",
-        "short_label": "CTR",
-        "description": "Locally-administered Council Tax Reduction / Support.",
-    },
-    {
         "key": "pension_credit",
         "variable": "pension_credit",
         "label": "Pension Credit",
@@ -95,14 +88,11 @@ BENEFIT_COMPONENTS = [
         "short_label": "Free hours",
         "description": "15/30 hours of funded childcare; withdrawn entirely above £100k income.",
     },
-    {
-        "key": "free_school_meals",
-        "variable": "free_school_meals",
-        "label": "Free School Meals",
-        "short_label": "FSM",
-        "description": "Value of free school meals for eligible children.",
-    },
 ]
+# NOTE: council_tax_benefit and free_school_meals were removed. Both are
+# survey-stub variables in policyengine-uk (no formula; they always return £0)
+# and showing them in the breakdown was misleading. See README — Modelling
+# limitations.
 
 # Tax components subtracted from market income + support.
 TAX_COMPONENTS = [
