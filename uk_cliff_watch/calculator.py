@@ -60,7 +60,6 @@ class HouseholdMemberInput:
     kind: str  # "adult" | "child"
     is_disabled: bool = False
     is_blind: bool = False
-    is_severely_disabled: bool = False  # UI "Needs care"
     is_full_time_student: bool = False  # carried for parity; no UK PE input
     is_pregnant: bool = False  # carried for parity; no UK PE input
     is_carer: bool = False  # 35+ hrs/wk unpaid care — triggers Carer's Allowance
@@ -158,7 +157,6 @@ def _resolved_people(payload: HouseholdInput) -> list[dict[str, Any]]:
                 "age": int(member.age),
                 "is_disabled": bool(member.is_disabled),
                 "is_blind": bool(member.is_blind),
-                "is_severely_disabled": bool(member.is_severely_disabled),
                 "is_full_time_student": bool(member.is_full_time_student),
                 "is_pregnant": bool(member.is_pregnant),
                 "is_carer": bool(member.is_carer),
@@ -226,7 +224,16 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
     member_ids = [p["id"] for p in members]
 
     has_children = any(p["kind"] == "child" for p in members)
+    num_children = sum(1 for p in members if p["kind"] == "child")
+    # Split childcare expenses evenly across all children to avoid inflating the
+    # total (assigning the full amount to each child would multiply it by n).
+    childcare_per_child = (
+        _nonnegative(payload.childcare_expenses_annual) / num_children
+        if num_children > 0 and payload.childcare_expenses_annual > 0
+        else 0.0
+    )
     people: dict[str, Any] = {}
+    adult_index = 0
     for index, person in enumerate(members):
         person_data: dict[str, Any] = {
             "age": {year: person["age"]},
@@ -236,14 +243,19 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             person_data["is_disabled_for_benefits"] = {year: True}
         if person.get("is_blind"):
             person_data["is_blind"] = {year: True}
-        # Mark adults as parents when children are present so childcare support
-        # (Tax-Free Childcare, the 15/30 free hours) and its £100k cliff fire.
-        if person["kind"] == "adult" and has_children:
-            person_data["is_parent"] = {year: True}
+        if person["kind"] == "adult":
+            adult_index += 1
+            # Only mark the primary earner (adult_index == 1) as is_parent.
+            # Setting is_parent on a non-earning partner breaks the Tax-Free
+            # Childcare work condition, which requires EACH qualifying adult in
+            # the claimant unit to be in work — the non-earner would then fail
+            # that check and block TFC entitlement for the household.
+            if has_children and adult_index == 1:
+                person_data["is_parent"] = {year: True}
         # Set care_hours for carers — the CA qualifying threshold is 35 hrs/wk.
-        # We use max(35, stated care_hours) to ensure PE always sees ≥35 hrs so
-        # it grants full CA; the manual earnings-cliff override below then zeros
-        # CA when the carer's earnings exceed the £196/wk limit.
+        # We use max(35, stated care_hours) so PE grants full CA; the manual
+        # earnings-cliff override below then zeros CA when the carer's earnings
+        # exceed the £196/wk limit.
         if person.get("is_carer"):
             person_data["care_hours"] = {year: max(35.0, float(person.get("care_hours") or 35.0))}
         if index == 0:
@@ -252,10 +264,8 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
                 person_data["employment_income"] = {year: float(payload.earned_income)}
         else:
             person_data["employment_income"] = {year: 0.0}
-        if person["kind"] == "child" and payload.childcare_expenses_annual > 0:
-            person_data["childcare_expenses"] = {
-                year: _nonnegative(payload.childcare_expenses_annual)
-            }
+        if person["kind"] == "child" and childcare_per_child > 0:
+            person_data["childcare_expenses"] = {year: childcare_per_child}
         people[person["id"]] = person_data
 
     household: dict[str, Any] = {
@@ -701,7 +711,6 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
             kind=str(person.get("kind") or ("child" if int(person["age"]) < 18 else "adult")),
             is_disabled=bool(person.get("is_disabled", False)),
             is_blind=bool(person.get("is_blind", False)),
-            is_severely_disabled=bool(person.get("is_incapable_of_self_care", person.get("is_severely_disabled", False))),
             is_full_time_student=bool(person.get("is_full_time_student", False)),
             is_pregnant=bool(person.get("is_pregnant", False)),
             is_carer=bool(person.get("is_carer", False)),
