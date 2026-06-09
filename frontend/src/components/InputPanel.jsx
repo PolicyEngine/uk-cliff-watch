@@ -175,6 +175,10 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       rent_annual: payload.rent_annual ?? 0,
       childcare_expenses_annual: payload.childcare_expenses_annual ?? 0,
       savings: payload.savings ?? 0,
+      partner_earnings: payload.partner_earnings ?? 0,
+      pension_income: payload.pension_income ?? 0,
+      self_employment_income: payload.self_employment_income ?? 0,
+      other_unearned_income: payload.other_unearned_income ?? 0,
       is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
@@ -566,6 +570,42 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                       value={inputs.savings}
                       onChange={(value) => update({ savings: value })}
                       tooltip="Total household savings and capital. Universal Credit tapers from £6,000 and stops entirely above £16,000 — a hard cliff."
+                    />
+                  </div>
+                </section>
+
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Other income</h3>
+                  <div className="advanced-field-grid advanced-field-grid--two">
+                    {isCouple ? (
+                      <CurrencyField
+                        id="partner_earnings"
+                        label="Partner's earnings"
+                        value={inputs.partner_earnings}
+                        onChange={(value) => update({ partner_earnings: value })}
+                        tooltip="Annual employment income for the second adult. Counts toward the joint benefit unit, so it tapers Universal Credit just like the primary earner's pay."
+                      />
+                    ) : null}
+                    <CurrencyField
+                      id="pension_income"
+                      label="Private pension income"
+                      value={inputs.pension_income}
+                      onChange={(value) => update({ pension_income: value })}
+                      tooltip="Annual private or occupational pension income on the primary adult. For pensioners it withdraws Pension Credit pound-for-pound."
+                    />
+                    <CurrencyField
+                      id="self_employment_income"
+                      label="Self-employment income"
+                      value={inputs.self_employment_income}
+                      onChange={(value) => update({ self_employment_income: value })}
+                      tooltip="Annual profit from self-employment on the primary adult. Taxed and means-tested like earnings."
+                    />
+                    <CurrencyField
+                      id="other_unearned_income"
+                      label="Other unearned income"
+                      value={inputs.other_unearned_income}
+                      onChange={(value) => update({ other_unearned_income: value })}
+                      tooltip="Savings interest, dividends or property income on the primary adult. Modelled as taxable savings interest."
                     />
                   </div>
                 </section>

@@ -141,6 +141,10 @@ export function reconcileInputs(inputs, metadata) {
     rent_annual: nonnegative(inputs?.rent_annual),
     childcare_expenses_annual: nonnegative(inputs?.childcare_expenses_annual),
     savings: nonnegative(inputs?.savings),
+    partner_earnings: nonnegative(inputs?.partner_earnings),
+    pension_income: nonnegative(inputs?.pension_income),
+    self_employment_income: nonnegative(inputs?.self_employment_income),
+    other_unearned_income: nonnegative(inputs?.other_unearned_income),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
     chart_max_earned_income: Math.max(
       10000,
@@ -182,6 +186,10 @@ export function buildHouseholdPayload(inputs, metadata) {
     rent_annual: normalized.rent_annual,
     childcare_expenses_annual: normalized.childcare_expenses_annual,
     savings: normalized.savings,
+    partner_earnings: normalized.partner_earnings,
+    pension_income: normalized.pension_income,
+    self_employment_income: normalized.self_employment_income,
+    other_unearned_income: normalized.other_unearned_income,
     is_renting: normalized.is_renting,
     people: normalized.people,
   }
