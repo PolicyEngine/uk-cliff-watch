@@ -132,11 +132,19 @@ Responses are JSON objects whose shape is documented in `uk_cliff_watch/calculat
 
 ## Modelled scope and caveats
 
-- **v1 models** the main means-tested benefits (Universal Credit, Child Benefit, Child/Working Tax Credit, Housing Benefit, Council Tax Reduction, Pension Credit, Tax-Free Childcare, Free School Meals) and the main direct taxes (Income Tax, National Insurance, Council Tax).
-- **Council Tax Reduction** is locally administered and varies by council; the model uses the PolicyEngine UK approximation.
+- **v1 models** the main means-tested benefits (Universal Credit, Child Benefit, Child/Working Tax Credit, Housing Benefit, Pension Credit, Tax-Free Childcare, free childcare hours) and the main direct taxes (Income Tax, National Insurance, Council Tax).
 - **Disability benefits** (DLA, PIP, Carer's Allowance, ESA) are not yet modelled.
-- **Childcare cliffs** are partially modelled via Tax-Free Childcare; the 15/30-hours free childcare thresholds are not yet reflected.
+- **Childcare cliffs** are modelled via Tax-Free Childcare and the 15/30-hours free childcare entitlement; both are withdrawn entirely above £100k gross income.
 - All figures are modelled estimates for **tax year 2026**, computed by PolicyEngine UK version ≥ 2.88.0. They are not financial or legal advice.
+
+### Modelling limitations
+
+The following items are **not** included in the programme breakdown, even though they are real UK entitlements:
+
+- **Council Tax Reduction** — `council_tax_benefit` is a survey-stub variable in PolicyEngine UK (no formula; it always returns £0 in simulation). The benefit is locally administered and cannot be computed from household characteristics alone.
+- **Free School Meals** — `free_school_meals` is similarly a survey-stub variable in PolicyEngine UK (no formula; always returns £0). Eligibility rules vary by devolved nation and are not currently implemented.
+
+Both were removed from the programme breakdown to avoid displaying misleading £0 lines.
 
 ---
 
