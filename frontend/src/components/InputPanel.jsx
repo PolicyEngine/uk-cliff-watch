@@ -174,6 +174,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       region: payload.region,
       rent_annual: payload.rent_annual ?? 0,
       childcare_expenses_annual: payload.childcare_expenses_annual ?? 0,
+      savings: payload.savings ?? 0,
       is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
@@ -551,6 +552,20 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                       label="Childcare costs"
                       value={inputs.childcare_expenses_annual}
                       onChange={(value) => update({ childcare_expenses_annual: value })}
+                    />
+                  </div>
+                </section>
+
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Savings &amp; capital</h3>
+                  <div className="advanced-field-grid">
+                    <CurrencyField
+                      id="savings"
+                      label="Savings / capital"
+                      step={1000}
+                      value={inputs.savings}
+                      onChange={(value) => update({ savings: value })}
+                      tooltip="Total household savings and capital. Universal Credit tapers from £6,000 and stops entirely above £16,000 — a hard cliff."
                     />
                   </div>
                 </section>

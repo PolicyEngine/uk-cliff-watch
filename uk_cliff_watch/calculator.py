@@ -65,6 +65,7 @@ class HouseholdInput:
     rent_annual: float = 0.0
     childcare_expenses_annual: float = 0.0
     is_renting: bool = True
+    savings: float = 0.0  # household capital — the £16k UC cliff
 
 
 # --------------------------------------------------------------------------- #
@@ -210,6 +211,7 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
     members = descriptor["people"]
     member_ids = [p["id"] for p in members]
 
+    has_children = any(p["kind"] == "child" for p in members)
     people: dict[str, Any] = {}
     for index, person in enumerate(members):
         person_data: dict[str, Any] = {
@@ -220,8 +222,10 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             person_data["is_disabled_for_benefits"] = {year: True}
         if person.get("is_blind"):
             person_data["is_blind"] = {year: True}
-        if person.get("is_severely_disabled"):
-            person_data["is_severely_disabled_for_benefits"] = {year: True}
+        # Mark adults as parents when children are present so childcare support
+        # (Tax-Free Childcare, the 15/30 free hours) and its £100k cliff fire.
+        if person["kind"] == "adult" and has_children:
+            person_data["is_parent"] = {year: True}
         if index == 0:
             # Primary earner: either a fixed value or the axis sweep.
             if not vary_income:
@@ -240,6 +244,8 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
     }
     if payload.rent_annual > 0:
         household["rent"] = {year: _nonnegative(payload.rent_annual)}
+    if payload.savings > 0:
+        household["savings"] = {year: _nonnegative(payload.savings)}
     benunit: dict[str, Any] = {"members": member_ids}
     if payload.rent_annual > 0:
         benunit["benunit_is_renting"] = {year: bool(payload.is_renting)}
@@ -641,6 +647,7 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
         rent_annual=numeric("rent_annual"),
         childcare_expenses_annual=numeric("childcare_expenses_annual"),
         is_renting=bool(data.get("is_renting", numeric("rent_annual") > 0)),
+        savings=numeric("savings"),
     )
 
 

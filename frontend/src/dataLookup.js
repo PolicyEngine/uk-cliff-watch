@@ -140,6 +140,7 @@ export function reconcileInputs(inputs, metadata) {
     people: normalizedPeople,
     rent_annual: nonnegative(inputs?.rent_annual),
     childcare_expenses_annual: nonnegative(inputs?.childcare_expenses_annual),
+    savings: nonnegative(inputs?.savings),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
     chart_max_earned_income: Math.max(
       10000,
@@ -180,6 +181,7 @@ export function buildHouseholdPayload(inputs, metadata) {
     year: normalized.year,
     rent_annual: normalized.rent_annual,
     childcare_expenses_annual: normalized.childcare_expenses_annual,
+    savings: normalized.savings,
     is_renting: normalized.is_renting,
     people: normalized.people,
   }

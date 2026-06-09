@@ -89,6 +89,13 @@ BENEFIT_COMPONENTS = [
         "description": "Government childcare top-up, withdrawn entirely above £100k (a hard cliff).",
     },
     {
+        "key": "extended_childcare_entitlement",
+        "variable": "extended_childcare_entitlement",
+        "label": "Free childcare hours",
+        "short_label": "Free hours",
+        "description": "15/30 hours of funded childcare; withdrawn entirely above £100k income.",
+    },
+    {
         "key": "free_school_meals",
         "variable": "free_school_meals",
         "label": "Free School Meals",
@@ -219,6 +226,28 @@ PRESETS = [
                 {"kind": "adult", "age": 40},
                 {"kind": "child", "age": 8},
                 {"kind": "child", "age": 11},
+            ],
+        },
+    },
+    {
+        "id": "childcare_cliff",
+        "label": "The £100k childcare cliff",
+        "tagline": "One earner, young child, nursery fees",
+        "description": (
+            "A single earner with a nursery-age child and childcare costs. At "
+            "£100,000 of income the family loses Tax-Free Childcare and the 15/30 "
+            "free hours outright — a genuine cliff where net income falls as pay "
+            "rises. This is one of the few hard cliffs on the UK earnings axis."
+        ),
+        "payload": {
+            "region": "LONDON",
+            "earned_income": 95000,
+            "rent_annual": 0,
+            "childcare_expenses_annual": 12000,
+            "is_renting": False,
+            "people": [
+                {"kind": "adult", "age": 38},
+                {"kind": "child", "age": 3},
             ],
         },
     },
