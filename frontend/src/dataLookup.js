@@ -145,6 +145,7 @@ export function reconcileInputs(inputs, metadata) {
     childcare_expenses_annual: nonnegative(inputs?.childcare_expenses_annual),
     savings: nonnegative(inputs?.savings),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
+    student_loan_plan: inputs?.student_loan_plan || 'NONE',
     chart_max_earned_income: Math.max(
       10000,
       Number(inputs?.chart_max_earned_income) || defaultChartMax,
@@ -165,6 +166,7 @@ export function createInitialInputs(metadata) {
     rent_annual: defaults.rent_annual || 0,
     childcare_expenses_annual: 0,
     is_renting: true,
+    student_loan_plan: 'NONE',
     chart_max_earned_income:
       defaults.chart_max_earned_income
       || defaults.series_max_earned_income
@@ -186,6 +188,7 @@ export function buildHouseholdPayload(inputs, metadata) {
     childcare_expenses_annual: normalized.childcare_expenses_annual,
     savings: normalized.savings,
     is_renting: normalized.is_renting,
+    student_loan_plan: normalized.student_loan_plan || 'NONE',
     people: normalized.people,
   }
 }
