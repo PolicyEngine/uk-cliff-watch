@@ -17,6 +17,7 @@ from typing import Any
 
 from uk_cliff_watch.config import (
     BENEFIT_COMPONENTS,
+    DEFAULT_COUNCIL_TAX_BAND,
     DEFAULT_CLIFF_DELTA,
     DEFAULT_SERIES_EARNINGS_BUFFER,
     DEFAULT_SERIES_MAX_EARNINGS,
@@ -32,6 +33,7 @@ from uk_cliff_watch.config import (
     REGION_INFO,
     REGION_NAME_BY_CODE,
     TAX_COMPONENTS,
+    council_tax_for_band,
 )
 
 
@@ -43,6 +45,16 @@ BENEFIT_BY_KEY = {item["key"]: item for item in BENEFIT_COMPONENTS}
 TAX_BY_KEY = {item["key"]: item for item in TAX_COMPONENTS}
 _MISSING_VARIABLE_WARNINGS_EMITTED: set[str] = set()
 
+# PolicyEngine UK does NOT model the Carer's Allowance earnings limit.
+# CA pays whenever care_hours >= 35, regardless of the carer's earnings.
+# We therefore apply the cliff manually: if the carer's net earnings in
+# the current simulation point exceed £196/week (£10,192/year) we zero the
+# carers_allowance component and reduce net_income by the same amount.
+# The UC carer element (uc_carer_element) is left intact — it tapers with
+# the UC earnings taper and is NOT subject to this hard earnings limit.
+CARERS_ALLOWANCE_WEEKLY_EARNINGS_LIMIT = 196  # £/week (2025/26 figure)
+_CA_ANNUAL_EARNINGS_LIMIT = CARERS_ALLOWANCE_WEEKLY_EARNINGS_LIMIT * 52  # = 10_192
+
 
 @dataclass(frozen=True)
 class HouseholdMemberInput:
@@ -50,9 +62,10 @@ class HouseholdMemberInput:
     kind: str  # "adult" | "child"
     is_disabled: bool = False
     is_blind: bool = False
-    is_severely_disabled: bool = False  # UI "Needs care"
     is_full_time_student: bool = False  # carried for parity; no UK PE input
     is_pregnant: bool = False  # carried for parity; no UK PE input
+    is_carer: bool = False  # 35+ hrs/wk unpaid care — triggers Carer's Allowance
+    care_hours: float = 0.0  # hours of unpaid care per week (minimum 35 for CA)
 
 
 @dataclass(frozen=True)
@@ -75,6 +88,8 @@ class HouseholdInput:
     # Other unearned income (savings interest, dividends, property). Modelled as
     # savings interest for simplicity; documented for the UI.
     other_unearned_income: float = 0.0
+    council_tax_band: str = DEFAULT_COUNCIL_TAX_BAND  # drives the Council Tax line
+    student_loan_plan: str = "NONE"  # applies to primary earner (adult-0)
 
 
 # --------------------------------------------------------------------------- #
@@ -155,9 +170,10 @@ def _resolved_people(payload: HouseholdInput) -> list[dict[str, Any]]:
                 "age": int(member.age),
                 "is_disabled": bool(member.is_disabled),
                 "is_blind": bool(member.is_blind),
-                "is_severely_disabled": bool(member.is_severely_disabled),
                 "is_full_time_student": bool(member.is_full_time_student),
                 "is_pregnant": bool(member.is_pregnant),
+                "is_carer": bool(member.is_carer),
+                "care_hours": float(member.care_hours),
             }
         )
     return people
@@ -221,7 +237,16 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
     member_ids = [p["id"] for p in members]
 
     has_children = any(p["kind"] == "child" for p in members)
+    num_children = sum(1 for p in members if p["kind"] == "child")
+    # Split childcare expenses evenly across all children to avoid inflating the
+    # total (assigning the full amount to each child would multiply it by n).
+    childcare_per_child = (
+        _nonnegative(payload.childcare_expenses_annual) / num_children
+        if num_children > 0 and payload.childcare_expenses_annual > 0
+        else 0.0
+    )
     people: dict[str, Any] = {}
+    adult_index = 0
     for index, person in enumerate(members):
         person_data: dict[str, Any] = {
             "age": {year: person["age"]},
@@ -231,10 +256,21 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             person_data["is_disabled_for_benefits"] = {year: True}
         if person.get("is_blind"):
             person_data["is_blind"] = {year: True}
-        # Mark adults as parents when children are present so childcare support
-        # (Tax-Free Childcare, the 15/30 free hours) and its £100k cliff fire.
-        if person["kind"] == "adult" and has_children:
-            person_data["is_parent"] = {year: True}
+        if person["kind"] == "adult":
+            adult_index += 1
+            # Only mark the primary earner (adult_index == 1) as is_parent.
+            # Setting is_parent on a non-earning partner breaks the Tax-Free
+            # Childcare work condition, which requires EACH qualifying adult in
+            # the claimant unit to be in work — the non-earner would then fail
+            # that check and block TFC entitlement for the household.
+            if has_children and adult_index == 1:
+                person_data["is_parent"] = {year: True}
+        # Set care_hours for carers — the CA qualifying threshold is 35 hrs/wk.
+        # We use max(35, stated care_hours) so PE grants full CA; the manual
+        # earnings-cliff override below then zeros CA when the carer's earnings
+        # exceed the £196/wk limit.
+        if person.get("is_carer"):
+            person_data["care_hours"] = {year: max(35.0, float(person.get("care_hours") or 35.0))}
         if index == 0:
             # Primary earner: either a fixed value or the axis sweep.
             if not vary_income:
@@ -254,6 +290,11 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
                 person_data["savings_interest_income"] = {
                     year: _nonnegative(payload.other_unearned_income)
                 }
+            # Student loan — only on the primary earner (adult-0).
+            plan = (payload.student_loan_plan or "NONE").upper()
+            if plan != "NONE":
+                person_data["has_student_loan"] = {year: True}
+                person_data["student_loan_plan"] = {year: plan}
         elif person["kind"] == "adult":
             # Second adult (partner): earnings stay fixed at partner_earnings.
             person_data["employment_income"] = {
@@ -261,10 +302,8 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             }
         else:
             person_data["employment_income"] = {year: 0.0}
-        if person["kind"] == "child" and payload.childcare_expenses_annual > 0:
-            person_data["childcare_expenses"] = {
-                year: _nonnegative(payload.childcare_expenses_annual)
-            }
+        if person["kind"] == "child" and childcare_per_child > 0:
+            person_data["childcare_expenses"] = {year: childcare_per_child}
         people[person["id"]] = person_data
 
     household: dict[str, Any] = {
@@ -275,6 +314,15 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
         household["rent"] = {year: _nonnegative(payload.rent_annual)}
     if payload.savings > 0:
         household["savings"] = {year: _nonnegative(payload.savings)}
+    # Council Tax band -> gross annual liability. policyengine-uk treats
+    # `council_tax` as a survey input on synthetic households, so we both record
+    # the band (used by band-dependent variables) and set the implied bill so the
+    # Council Tax line reflects a real figure instead of £0.
+    if payload.council_tax_band:
+        household["council_tax_band"] = {year: payload.council_tax_band}
+        council_tax = council_tax_for_band(payload.council_tax_band)
+        if council_tax > 0:
+            household["council_tax"] = {year: council_tax}
     benunit: dict[str, Any] = {"members": member_ids}
     if payload.rent_annual > 0:
         benunit["benunit_is_renting"] = {year: bool(payload.is_renting)}
@@ -348,6 +396,35 @@ def _components_at(simulation: Any, year: int) -> tuple[dict[str, float], dict[s
 
 
 # --------------------------------------------------------------------------- #
+# Carer's Allowance earnings-cliff override                                    #
+# --------------------------------------------------------------------------- #
+def _has_carer(payload: HouseholdInput) -> bool:
+    """Return True when any adult in this household is marked is_carer."""
+    return any(p.is_carer for p in _input_people(payload) if p.kind == "adult")
+
+
+def _apply_ca_cliff(
+    benefits: dict[str, float],
+    net_income: float,
+    carer_annual_earnings: float,
+) -> tuple[dict[str, float], float]:
+    """Zero the carers_allowance component when the carer's earnings exceed the
+    £196/wk limit (£10,192/yr).  PolicyEngine UK does not enforce this limit, so
+    we apply the correction manually.  uc_carer_element is left intact.
+
+    Returns a (possibly updated) copy of benefits and the adjusted net_income.
+    """
+    ca = benefits.get("carers_allowance", 0.0)
+    if ca <= 0 or carer_annual_earnings <= _CA_ANNUAL_EARNINGS_LIMIT:
+        return benefits, net_income
+    # Earnings exceed the limit — the carer loses the entire CA award.
+    benefits = dict(benefits)
+    benefits["carers_allowance"] = 0.0
+    net_income = round(net_income - ca, 2)
+    return benefits, net_income
+
+
+# --------------------------------------------------------------------------- #
 # Single-household calculation (with cliff + EMTR)                             #
 # --------------------------------------------------------------------------- #
 def _simulate_point(payload: HouseholdInput) -> dict[str, Any]:
@@ -362,6 +439,17 @@ def _simulate_point(payload: HouseholdInput) -> dict[str, Any]:
     market_income = _calc(simulation, "household_market_income", year)
     net_income = _calc(simulation, "household_net_income", year)
     benefits, taxes = _components_at(simulation, year)
+
+    # Manual Carer's Allowance earnings-cliff correction.
+    # PolicyEngine always pays CA when care_hours >= 35; it does not enforce the
+    # £196/wk earnings limit.  For the primary earner (adult-0) the earnings at
+    # this specific point is payload.earned_income; for any secondary carer it
+    # would be 0, so the cliff never fires unless adult-0 is the carer.
+    if _has_carer(payload):
+        # The axis person (adult-0) is the only one whose earnings vary per point.
+        carer_earnings = float(payload.earned_income)
+        benefits, net_income = _apply_ca_cliff(benefits, net_income, carer_earnings)
+
     total_benefits = round(sum(benefits.values()), 2)
     total_tax = round(sum(taxes.values()), 2)
     rent = _nonnegative(payload.rent_annual)
@@ -417,6 +505,7 @@ def calculate_household(payload: HouseholdInput, *, delta: int = DEFAULT_CLIFF_D
             "pension_income": payload.pension_income,
             "self_employment_income": payload.self_employment_income,
             "other_unearned_income": payload.other_unearned_income,
+            "council_tax_band": payload.council_tax_band,
             "people": [
                 {"kind": p["kind"], "age": p["age"], "is_disabled": p["is_disabled"]}
                 for p in descriptor["people"]
@@ -524,20 +613,36 @@ def calculate_income_series(payload: HouseholdInput, *,
                   for item in TAX_COMPONENTS}
     rent = _nonnegative(payload.rent_annual)
 
+    has_carer = _has_carer(payload)
     points = []
     for i in range(point_count):
         benefits = {k: round(v[i], 2) for k, v in benefit_series.items()}
         taxes = {k: round(v[i], 2) for k, v in tax_series.items()}
+        net_i = round(net[i], 2)
+
+        # Manual Carer's Allowance earnings-cliff correction (series path).
+        # For the axis sweep adult-0 is the earner, so their earnings at point i
+        # equals earnings[i].  PE does not enforce the £196/wk limit, so we do.
+        if has_carer:
+            benefits, net_i = _apply_ca_cliff(benefits, net_i, earnings[i])
+
         points.append({
             "earned_income": round(earnings[i], 2),
             "market_income": round(market[i], 2),
-            "net_income": round(net[i], 2),
-            "net_after_housing": round(net[i] - rent, 2),
+            "net_income": net_i,
+            "net_after_housing": round(net_i - rent, 2),
             "total_benefits": round(sum(benefits.values()), 2),
             "total_tax": round(sum(taxes.values()), 2),
             "benefits": benefits,
             "taxes": taxes,
         })
+
+    # Notch detection thresholds: a large *positive* jump in net income that is
+    # at least 3× the earnings step AND at least £1,500 in a single step.
+    # The benefit-cap exemption (16 hrs/week threshold at ~£10,152/yr) produces
+    # a jump of ~£9,000–£10,000 and is the canonical UK notch on this chart.
+    _NOTCH_MULTIPLIER = 3
+    _NOTCH_MIN_ABS = 1_500.0
 
     data = []
     prev = None
@@ -545,6 +650,8 @@ def calculate_income_series(payload: HouseholdInput, *,
         net_change = 0.0
         emtr = 0.0
         cliff_drop = 0.0
+        notch_gain = 0.0
+        is_notch = False
         drivers: list[dict[str, Any]] = []
         if prev is not None:
             d_earn = point["earned_income"] - prev["earned_income"]
@@ -554,6 +661,11 @@ def calculate_income_series(payload: HouseholdInput, *,
             cliff_drop = round(max(0.0, -net_change), 2)
             if net_change < 0:
                 drivers = _build_cliff_drivers(prev, point)
+            # Notch: a large positive net-income jump in a single step.
+            if net_change > 0 and d_earn > 0:
+                if net_change > _NOTCH_MULTIPLIER * d_earn and net_change > _NOTCH_MIN_ABS:
+                    is_notch = True
+                    notch_gain = round(net_change, 2)
         data.append({
             "earned_income": point["earned_income"],
             # US-compatible field names (consumed by the ported frontend / cliffReport):
@@ -577,9 +689,21 @@ def calculate_income_series(payload: HouseholdInput, *,
             "is_cliff": cliff_drop > 0,
             "cliff_drop_annual": cliff_drop,
             "cliff_drivers": drivers,
+            "is_notch": is_notch,
+            "notch_gain_annual": notch_gain,
             "has_previous_point": prev is not None,
         })
         prev = point
+
+    notch_points = [d for d in data if d["is_notch"]]
+    max_notch: dict[str, Any] | None = None
+    if notch_points:
+        best = max(notch_points, key=lambda d: d["notch_gain_annual"])
+        max_notch = {
+            "earned_income": best["earned_income"],
+            "notch_gain_annual": best["notch_gain_annual"],
+            "notch_gain_monthly": round(best["notch_gain_annual"] / 12, 2),
+        }
 
     return {
         "data": data,
@@ -591,6 +715,7 @@ def calculate_income_series(payload: HouseholdInput, *,
         "max_net_income": max((d["net_income"] for d in data), default=0),
         "max_net_resources": max((d["net_resources"] for d in data), default=0),
         "max_marginal_rate_pct": max((d["marginal_rate_pct"] for d in data), default=0),
+        "max_notch": max_notch,
         "truncated": False,
         "truncation_reason": None,
     }
@@ -665,9 +790,10 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
             kind=str(person.get("kind") or ("child" if int(person["age"]) < 18 else "adult")),
             is_disabled=bool(person.get("is_disabled", False)),
             is_blind=bool(person.get("is_blind", False)),
-            is_severely_disabled=bool(person.get("is_incapable_of_self_care", person.get("is_severely_disabled", False))),
             is_full_time_student=bool(person.get("is_full_time_student", False)),
             is_pregnant=bool(person.get("is_pregnant", False)),
+            is_carer=bool(person.get("is_carer", False)),
+            care_hours=float(person.get("care_hours", 0) or 0),
         )
         for person in data.get("people", [])
     )
@@ -685,6 +811,8 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
         pension_income=numeric("pension_income"),
         self_employment_income=numeric("self_employment_income"),
         other_unearned_income=numeric("other_unearned_income"),
+        council_tax_band=str(data.get("council_tax_band") or DEFAULT_COUNCIL_TAX_BAND).upper(),
+        student_loan_plan=str(data.get("student_loan_plan") or "NONE").upper(),
     )
 
 

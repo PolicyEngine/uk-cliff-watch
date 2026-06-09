@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 DEFAULT_YEAR = 2026
-# Sweep to £120k (covers the onset of the £100k personal-allowance trap).
-DEFAULT_SERIES_MAX_EARNINGS = 120_000
+# Sweep to £135k so the £100k personal-allowance trap EXIT at £125,140 and the
+# step to the 45% additional rate are both visible on the chart.
+DEFAULT_SERIES_MAX_EARNINGS = 135_000
 DEFAULT_SERIES_STEP = 500
 DEFAULT_CLIFF_DELTA = 1_000
 DEFAULT_SERIES_EARNINGS_BUFFER = 20_000
 DEFAULT_SERIES_MIN_EARNINGS_WINDOW = 80_000
-DEFAULT_SERIES_TARGET_POINTS = 281
+# 271 points keeps the ~£500 step at the new 135k ceiling.
+DEFAULT_SERIES_TARGET_POINTS = 271
 DEFAULT_SERIES_STEP_INCREMENT = 250
 MAX_ADULTS = 2
 MAX_DEPENDENTS = 6
@@ -28,6 +30,47 @@ REGION_INFO = [
     {"code": "NORTHERN_IRELAND", "name": "Northern Ireland"},
 ]
 REGION_NAME_BY_CODE = {item["code"]: item["name"] for item in REGION_INFO}
+
+# --------------------------------------------------------------------------- #
+# Council Tax bands                                                            #
+# --------------------------------------------------------------------------- #
+# policyengine-uk exposes a settable `council_tax_band` enum (A-I), but in the
+# supported 2.88.x line `council_tax` is a survey input and is not derived from
+# the band on a synthetic household. To make the band a meaningful, responsive
+# input (and stop the Council Tax line showing £0), we translate the chosen band
+# into a gross annual liability using the statutory band ratios relative to
+# Band D, applied to a representative Band D bill. Band I exists only in Wales.
+#
+# Ratios are the legislated proportions of a Band D charge (in ninths).
+COUNCIL_TAX_BAND_RATIOS = {
+    "A": 6 / 9,
+    "B": 7 / 9,
+    "C": 8 / 9,
+    "D": 9 / 9,
+    "E": 11 / 9,
+    "F": 13 / 9,
+    "G": 15 / 9,
+    "H": 18 / 9,
+    "I": 21 / 9,  # Wales only
+}
+# Representative Band D council tax bill (England average, ~2024/25).
+COUNCIL_TAX_BAND_D_ANNUAL = 2_171.0
+DEFAULT_COUNCIL_TAX_BAND = "D"
+COUNCIL_TAX_BANDS = [
+    {"code": band, "label": f"Band {band}"} for band in COUNCIL_TAX_BAND_RATIOS
+]
+COUNCIL_TAX_BAND_CODES = [b["code"] for b in COUNCIL_TAX_BANDS]
+
+
+def council_tax_for_band(band: str | None) -> float:
+    """Gross annual Council Tax implied by a band, before any reduction."""
+    if not band:
+        return 0.0
+    ratio = COUNCIL_TAX_BAND_RATIOS.get(str(band).upper())
+    if ratio is None:
+        return 0.0
+    return round(COUNCIL_TAX_BAND_D_ANNUAL * ratio, 2)
+
 
 # Benefit (support) components summed into household support.
 # Each maps a policyengine-uk variable to the household entity.
@@ -68,13 +111,6 @@ BENEFIT_COMPONENTS = [
         "description": "Legacy Housing Benefit for renters not on Universal Credit.",
     },
     {
-        "key": "council_tax_benefit",
-        "variable": "council_tax_benefit",
-        "label": "Council Tax Reduction",
-        "short_label": "CTR",
-        "description": "Locally-administered Council Tax Reduction / Support.",
-    },
-    {
         "key": "pension_credit",
         "variable": "pension_credit",
         "label": "Pension Credit",
@@ -96,13 +132,32 @@ BENEFIT_COMPONENTS = [
         "description": "15/30 hours of funded childcare; withdrawn entirely above £100k income.",
     },
     {
-        "key": "free_school_meals",
-        "variable": "free_school_meals",
-        "label": "Free School Meals",
-        "short_label": "FSM",
-        "description": "Value of free school meals for eligible children.",
+        "key": "carers_allowance",
+        "variable": "carers_allowance",
+        "label": "Carer's Allowance",
+        "short_label": "CA",
+        "description": (
+            "Carer's Allowance (~£83.30/week, £4,331/yr) — paid when the carer "
+            "provides ≥35 hours of unpaid care.  Abolished entirely if the carer's "
+            "net earnings exceed £196/week (£10,192/yr): a hard cliff."
+        ),
+    },
+    {
+        "key": "uc_carer_element",
+        "variable": "uc_carer_element",
+        "label": "UC carer element",
+        "short_label": "UC carer",
+        "description": (
+            "Universal Credit carer element (~£2,901/yr in 2025/26), added to the UC "
+            "award when the claimant is entitled to Carer's Allowance.  Unlike CA "
+            "itself this element tapers away gradually with the UC earnings taper."
+        ),
     },
 ]
+# NOTE: council_tax_benefit and free_school_meals were removed. Both are
+# survey-stub variables in policyengine-uk (no formula; they always return £0)
+# and showing them in the breakdown was misleading. See README — Modelling
+# limitations.
 
 # Tax components subtracted from market income + support.
 TAX_COMPONENTS = [
@@ -126,6 +181,17 @@ TAX_COMPONENTS = [
         "label": "Council Tax",
         "short_label": "Council Tax",
         "description": "Council Tax net of any reduction.",
+    },
+    {
+        "key": "student_loan_repayment",
+        "variable": "student_loan_repayment",
+        "label": "Student Loan Repayment",
+        "short_label": "Student Loan",
+        "description": (
+            "Student loan repayment (Plan 1: 9% above ~£24,990; "
+            "Plan 2: 9% above ~£27,295; Plan 4: 9% above ~£31,395; "
+            "Plan 5: 9% above ~£25,000; Postgraduate: 6% above £21,000)."
+        ),
     },
 ]
 
@@ -313,6 +379,55 @@ PRESETS = [
             "is_renting": True,
             "people": [
                 {"kind": "adult", "age": 30},
+            ],
+        },
+    },
+    {
+        "id": "benefit_cap_notch",
+        "label": "Benefit-cap notch",
+        "tagline": "Lone parent, 4 children, London, high rent",
+        "description": (
+            "A lone parent with four young children renting in London at £24,000/yr. "
+            "The household benefit cap binds at zero earnings (capping total benefits "
+            "at ~£25,323/yr for a household in the London cap zone). At around "
+            "£10,152/yr earned income the earner crosses the 16-hours/week threshold "
+            "that exempts working families from the benefit cap — net income jumps by "
+            "~£9,000-£10,000 in a single step. This is a large positive NOTCH "
+            "(net income rises sharply as pay rises) rather than a cliff."
+        ),
+        "payload": {
+            "region": "LONDON",
+            "earned_income": 0,
+            "rent_annual": 24000,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 35},
+                {"kind": "child", "age": 2},
+                {"kind": "child", "age": 4},
+                {"kind": "child", "age": 6},
+                {"kind": "child", "age": 9},
+            ],
+        },
+    },
+    {
+        "id": "carers_allowance_cliff",
+        "label": "Carer's Allowance cliff",
+        "tagline": "Single carer, 35+ hrs/week, modest rent",
+        "description": (
+            "A single adult providing 35+ hours of unpaid care, renting in the "
+            "North West.  Carer's Allowance (~£4,331/yr) is cut to zero the "
+            "moment net earnings exceed £196/week (£10,192/yr) — one of the "
+            "sharpest hard cliffs in the UK benefit system."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 8000,
+            "rent_annual": 7200,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 40, "is_carer": True, "care_hours": 35},
             ],
         },
     },
