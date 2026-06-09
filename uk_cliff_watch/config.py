@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 DEFAULT_YEAR = 2026
-# Sweep to £120k (covers the onset of the £100k personal-allowance trap).
-DEFAULT_SERIES_MAX_EARNINGS = 120_000
+# Sweep to £135k so the £100k personal-allowance trap EXIT at £125,140 and the
+# step to the 45% additional rate are both visible on the chart.
+DEFAULT_SERIES_MAX_EARNINGS = 135_000
 DEFAULT_SERIES_STEP = 500
 DEFAULT_CLIFF_DELTA = 1_000
 DEFAULT_SERIES_EARNINGS_BUFFER = 20_000
 DEFAULT_SERIES_MIN_EARNINGS_WINDOW = 80_000
-DEFAULT_SERIES_TARGET_POINTS = 281
+# 271 points keeps the ~£500 step at the new 135k ceiling.
+DEFAULT_SERIES_TARGET_POINTS = 271
 DEFAULT_SERIES_STEP_INCREMENT = 250
 MAX_ADULTS = 2
 MAX_DEPENDENTS = 6
@@ -126,6 +128,17 @@ TAX_COMPONENTS = [
         "label": "Council Tax",
         "short_label": "Council Tax",
         "description": "Council Tax net of any reduction.",
+    },
+    {
+        "key": "student_loan_repayment",
+        "variable": "student_loan_repayment",
+        "label": "Student Loan Repayment",
+        "short_label": "Student Loan",
+        "description": (
+            "Student loan repayment (Plan 1: 9% above ~£24,990; "
+            "Plan 2: 9% above ~£27,295; Plan 4: 9% above ~£31,395; "
+            "Plan 5: 9% above ~£25,000; Postgraduate: 6% above £21,000)."
+        ),
     },
 ]
 
@@ -289,6 +302,34 @@ PRESETS = [
             "is_renting": True,
             "people": [
                 {"kind": "adult", "age": 30},
+            ],
+        },
+    },
+    {
+        "id": "benefit_cap_notch",
+        "label": "Benefit-cap notch",
+        "tagline": "Lone parent, 4 children, London, high rent",
+        "description": (
+            "A lone parent with four young children renting in London at £24,000/yr. "
+            "The household benefit cap binds at zero earnings (capping total benefits "
+            "at ~£25,323/yr for a household in the London cap zone). At around "
+            "£10,152/yr earned income the earner crosses the 16-hours/week threshold "
+            "that exempts working families from the benefit cap — net income jumps by "
+            "~£9,000-£10,000 in a single step. This is a large positive NOTCH "
+            "(net income rises sharply as pay rises) rather than a cliff."
+        ),
+        "payload": {
+            "region": "LONDON",
+            "earned_income": 0,
+            "rent_annual": 24000,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 35},
+                {"kind": "child", "age": 2},
+                {"kind": "child", "age": 4},
+                {"kind": "child", "age": 6},
+                {"kind": "child", "age": 9},
             ],
         },
     },

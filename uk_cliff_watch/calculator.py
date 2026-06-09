@@ -66,6 +66,7 @@ class HouseholdInput:
     childcare_expenses_annual: float = 0.0
     is_renting: bool = True
     savings: float = 0.0  # household capital — the £16k UC cliff
+    student_loan_plan: str = "NONE"  # applies to primary earner (adult-0)
 
 
 # --------------------------------------------------------------------------- #
@@ -230,6 +231,11 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
             # Primary earner: either a fixed value or the axis sweep.
             if not vary_income:
                 person_data["employment_income"] = {year: float(payload.earned_income)}
+            # Student loan — only on the primary earner (adult-0).
+            plan = (payload.student_loan_plan or "NONE").upper()
+            if plan != "NONE":
+                person_data["has_student_loan"] = {year: True}
+                person_data["student_loan_plan"] = {year: plan}
         else:
             person_data["employment_income"] = {year: 0.0}
         if person["kind"] == "child" and payload.childcare_expenses_annual > 0:
@@ -506,12 +512,21 @@ def calculate_income_series(payload: HouseholdInput, *,
             "taxes": taxes,
         })
 
+    # Notch detection thresholds: a large *positive* jump in net income that is
+    # at least 3× the earnings step AND at least £1,500 in a single step.
+    # The benefit-cap exemption (16 hrs/week threshold at ~£10,152/yr) produces
+    # a jump of ~£9,000–£10,000 and is the canonical UK notch on this chart.
+    _NOTCH_MULTIPLIER = 3
+    _NOTCH_MIN_ABS = 1_500.0
+
     data = []
     prev = None
     for point in points:
         net_change = 0.0
         emtr = 0.0
         cliff_drop = 0.0
+        notch_gain = 0.0
+        is_notch = False
         drivers: list[dict[str, Any]] = []
         if prev is not None:
             d_earn = point["earned_income"] - prev["earned_income"]
@@ -521,6 +536,11 @@ def calculate_income_series(payload: HouseholdInput, *,
             cliff_drop = round(max(0.0, -net_change), 2)
             if net_change < 0:
                 drivers = _build_cliff_drivers(prev, point)
+            # Notch: a large positive net-income jump in a single step.
+            if net_change > 0 and d_earn > 0:
+                if net_change > _NOTCH_MULTIPLIER * d_earn and net_change > _NOTCH_MIN_ABS:
+                    is_notch = True
+                    notch_gain = round(net_change, 2)
         data.append({
             "earned_income": point["earned_income"],
             # US-compatible field names (consumed by the ported frontend / cliffReport):
@@ -544,9 +564,21 @@ def calculate_income_series(payload: HouseholdInput, *,
             "is_cliff": cliff_drop > 0,
             "cliff_drop_annual": cliff_drop,
             "cliff_drivers": drivers,
+            "is_notch": is_notch,
+            "notch_gain_annual": notch_gain,
             "has_previous_point": prev is not None,
         })
         prev = point
+
+    notch_points = [d for d in data if d["is_notch"]]
+    max_notch: dict[str, Any] | None = None
+    if notch_points:
+        best = max(notch_points, key=lambda d: d["notch_gain_annual"])
+        max_notch = {
+            "earned_income": best["earned_income"],
+            "notch_gain_annual": best["notch_gain_annual"],
+            "notch_gain_monthly": round(best["notch_gain_annual"] / 12, 2),
+        }
 
     return {
         "data": data,
@@ -558,6 +590,7 @@ def calculate_income_series(payload: HouseholdInput, *,
         "max_net_income": max((d["net_income"] for d in data), default=0),
         "max_net_resources": max((d["net_resources"] for d in data), default=0),
         "max_marginal_rate_pct": max((d["marginal_rate_pct"] for d in data), default=0),
+        "max_notch": max_notch,
         "truncated": False,
         "truncation_reason": None,
     }
@@ -648,6 +681,7 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
         childcare_expenses_annual=numeric("childcare_expenses_annual"),
         is_renting=bool(data.get("is_renting", numeric("rent_annual") > 0)),
         savings=numeric("savings"),
+        student_loan_plan=str(data.get("student_loan_plan") or "NONE").upper(),
     )
 
 
