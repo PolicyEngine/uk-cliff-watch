@@ -31,6 +31,47 @@ REGION_INFO = [
 ]
 REGION_NAME_BY_CODE = {item["code"]: item["name"] for item in REGION_INFO}
 
+# --------------------------------------------------------------------------- #
+# Council Tax bands                                                            #
+# --------------------------------------------------------------------------- #
+# policyengine-uk exposes a settable `council_tax_band` enum (A-I), but in the
+# supported 2.88.x line `council_tax` is a survey input and is not derived from
+# the band on a synthetic household. To make the band a meaningful, responsive
+# input (and stop the Council Tax line showing £0), we translate the chosen band
+# into a gross annual liability using the statutory band ratios relative to
+# Band D, applied to a representative Band D bill. Band I exists only in Wales.
+#
+# Ratios are the legislated proportions of a Band D charge (in ninths).
+COUNCIL_TAX_BAND_RATIOS = {
+    "A": 6 / 9,
+    "B": 7 / 9,
+    "C": 8 / 9,
+    "D": 9 / 9,
+    "E": 11 / 9,
+    "F": 13 / 9,
+    "G": 15 / 9,
+    "H": 18 / 9,
+    "I": 21 / 9,  # Wales only
+}
+# Representative Band D council tax bill (England average, ~2024/25).
+COUNCIL_TAX_BAND_D_ANNUAL = 2_171.0
+DEFAULT_COUNCIL_TAX_BAND = "D"
+COUNCIL_TAX_BANDS = [
+    {"code": band, "label": f"Band {band}"} for band in COUNCIL_TAX_BAND_RATIOS
+]
+COUNCIL_TAX_BAND_CODES = [b["code"] for b in COUNCIL_TAX_BANDS]
+
+
+def council_tax_for_band(band: str | None) -> float:
+    """Gross annual Council Tax implied by a band, before any reduction."""
+    if not band:
+        return 0.0
+    ratio = COUNCIL_TAX_BAND_RATIOS.get(str(band).upper())
+    if ratio is None:
+        return 0.0
+    return round(COUNCIL_TAX_BAND_D_ANNUAL * ratio, 2)
+
+
 # Benefit (support) components summed into household support.
 # Each maps a policyengine-uk variable to the household entity.
 BENEFIT_COMPONENTS = [

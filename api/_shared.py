@@ -18,7 +18,9 @@ from uk_cliff_watch.calculator import (
 )
 from uk_cliff_watch.config import (
     BENEFIT_COMPONENTS,
+    COUNCIL_TAX_BANDS,
     DEFAULT_CLIFF_DELTA,
+    DEFAULT_COUNCIL_TAX_BAND,
     DEFAULT_SERIES_EARNINGS_BUFFER,
     DEFAULT_SERIES_MIN_EARNINGS_WINDOW,
     DEFAULT_YEAR,
@@ -51,8 +53,10 @@ def metadata_response() -> dict[str, Any]:
         "programs": PROGRAM_DEFINITIONS,
         "benefits": BENEFIT_COMPONENTS,
         "taxes": TAX_COMPONENTS,
+        "council_tax_bands": COUNCIL_TAX_BANDS,
         "defaults": {
             "region": "NORTH_WEST",
+            "council_tax_band": DEFAULT_COUNCIL_TAX_BAND,
             "people": [
                 {"kind": "adult", "age": 35},
                 {"kind": "child", "age": 4},
