@@ -57,6 +57,17 @@ const MAX_ADULTS_FALLBACK = 2
 const MAX_DEPENDENTS_FALLBACK = 6
 const MIN_ADULT_AGE = 16
 const MAX_AGE = 120
+const DEFAULT_COUNCIL_TAX_BAND = 'D'
+
+const normalizeCouncilTaxBand = (band, metadata) => {
+  const bands = (metadata?.council_tax_bands || []).map((b) => b.code)
+  const fallback = metadata?.defaults?.council_tax_band || DEFAULT_COUNCIL_TAX_BAND
+  const candidate = String(band || '').toUpperCase()
+  if (candidate && (!bands.length || bands.includes(candidate))) {
+    return candidate
+  }
+  return fallback
+}
 
 const nonnegative = (value) => Math.max(0, Number(value) || 0)
 
@@ -113,6 +124,7 @@ export function normalizePeople(people = [], metadata) {
       dependentCount += 1
     }
 
+    const isCarer = kind === 'adult' && Boolean(person?.is_carer)
     return [{
       kind,
       age: normalizeAge(person?.age, kind === 'adult' ? MIN_ADULT_AGE : 0),
@@ -121,6 +133,8 @@ export function normalizePeople(people = [], metadata) {
       is_full_time_student: Boolean(person?.is_full_time_student),
       is_incapable_of_self_care: Boolean(person?.is_incapable_of_self_care),
       is_pregnant: Boolean(person?.is_pregnant),
+      is_carer: isCarer,
+      care_hours: isCarer ? Math.max(35, Number(person?.care_hours) || 35) : 0,
     }]
   })
 }
@@ -145,7 +159,9 @@ export function reconcileInputs(inputs, metadata) {
     pension_income: nonnegative(inputs?.pension_income),
     self_employment_income: nonnegative(inputs?.self_employment_income),
     other_unearned_income: nonnegative(inputs?.other_unearned_income),
+    council_tax_band: normalizeCouncilTaxBand(inputs?.council_tax_band, metadata),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
+    student_loan_plan: inputs?.student_loan_plan || 'NONE',
     chart_max_earned_income: Math.max(
       10000,
       Number(inputs?.chart_max_earned_income) || defaultChartMax,
@@ -165,7 +181,9 @@ export function createInitialInputs(metadata) {
     people: normalizePeople(defaultPeople, metadata),
     rent_annual: defaults.rent_annual || 0,
     childcare_expenses_annual: 0,
+    council_tax_band: defaults.council_tax_band || DEFAULT_COUNCIL_TAX_BAND,
     is_renting: true,
+    student_loan_plan: 'NONE',
     chart_max_earned_income:
       defaults.chart_max_earned_income
       || defaults.series_max_earned_income
@@ -190,7 +208,9 @@ export function buildHouseholdPayload(inputs, metadata) {
     pension_income: normalized.pension_income,
     self_employment_income: normalized.self_employment_income,
     other_unearned_income: normalized.other_unearned_income,
+    council_tax_band: normalized.council_tax_band,
     is_renting: normalized.is_renting,
+    student_loan_plan: normalized.student_loan_plan || 'NONE',
     people: normalized.people,
   }
 }
