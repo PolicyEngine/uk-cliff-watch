@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from uk_cliff_watch.calculator import (
+    CARERS_ALLOWANCE_WEEKLY_EARNINGS_LIMIT,
     HouseholdInput,
     HouseholdMemberInput,
     calculate_household,
@@ -272,3 +273,76 @@ def test_single_adult_zero_earnings_no_crash():
     assert result["totals"]["net_income"] >= 0, (
         f"net_income should be >= 0, got {result['totals']['net_income']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Carer's Allowance hard earnings cliff
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def carer_series():
+    """Single adult carer (35+ hrs/wk), North West, modest rent.
+    Sweep from £0 to £20,000 to capture the CA cliff near £10,192/yr."""
+    payload = HouseholdInput(
+        region="NORTH_WEST",
+        earned_income=0,
+        rent_annual=7_200,
+        is_renting=True,
+        people=(
+            HouseholdMemberInput(age=40, kind="adult", is_carer=True, care_hours=35),
+        ),
+    )
+    return calculate_income_series(payload, max_earned_income=20_000, step=500)
+
+
+def test_ca_cliff_fires_near_earnings_limit(carer_series):
+    """There must be exactly one cliff point near the £196/wk (£10,192/yr)
+    earnings limit where Carer's Allowance drops to £0."""
+    ca_annual_limit = CARERS_ALLOWANCE_WEEKLY_EARNINGS_LIMIT * 52  # 10_192
+    data = carer_series["data"]
+
+    # CA should be non-zero below the limit
+    below = [d for d in data if d["earned_income"] < ca_annual_limit]
+    assert any(d.get("carers_allowance", 0) > 0 for d in below), (
+        "Carer's Allowance should be > 0 for earnings below the £10,192 limit"
+    )
+
+    # CA should be zero above the limit
+    above = [d for d in data if d["earned_income"] > ca_annual_limit]
+    assert all(d.get("carers_allowance", 0) == 0 for d in above), (
+        "Carer's Allowance should be 0 for all earnings above the £10,192 limit"
+    )
+
+    # There must be at least one is_cliff point in the vicinity of the limit
+    cliff_points = [d for d in data if d["is_cliff"]]
+    assert len(cliff_points) >= 1, "Expected at least one cliff point in the series"
+
+    # The cliff drop should be close to the annual CA rate (~£4,331–£4,500/yr)
+    largest_drop = max(d["cliff_drop_annual"] for d in cliff_points)
+    assert 3_500 <= largest_drop <= 6_000, (
+        f"CA cliff drop should be ~£4,331–£4,500/yr, got £{largest_drop:.0f}"
+    )
+
+
+def test_ca_retained_below_earnings_limit(carer_series):
+    """Carer's Allowance must be positive at £8,000 earnings (well below limit)."""
+    data = carer_series["data"]
+    point_8k = next((d for d in data if abs(d["earned_income"] - 8_000) < 300), None)
+    assert point_8k is not None, "No data point near £8,000 earnings"
+    assert point_8k.get("carers_allowance", 0) > 0, (
+        f"CA should be > 0 at £8,000 earnings, got {point_8k.get('carers_allowance')}"
+    )
+
+
+def test_ca_household_input_from_dict_carer_fields():
+    """household_input_from_dict must parse is_carer and care_hours correctly."""
+    data = {
+        "region": "NORTH_WEST",
+        "earned_income": 9_000,
+        "people": [
+            {"age": 40, "kind": "adult", "is_carer": True, "care_hours": 40},
+        ],
+    }
+    hi = household_input_from_dict(data)
+    assert hi.people[0].is_carer is True, "is_carer should be True"
+    assert hi.people[0].care_hours == 40.0, f"care_hours should be 40.0, got {hi.people[0].care_hours}"
