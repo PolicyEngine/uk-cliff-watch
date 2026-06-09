@@ -21,13 +21,14 @@ const WIZARD_STEPS = [
   { id: 'review', label: 'Review' },
 ]
 
-// Person flags. Disabled/Blind/Needs care map to real policyengine-uk inputs;
-// Student is carried for parity with limited modelling.
+// Person flags. Disabled/Blind map to real policyengine-uk inputs.
+// Student is carried for parity (no UK PE input currently).
+// "Needs care" (is_severely_disabled / is_incapable_of_self_care) was removed:
+// it had no formula in policyengine-uk and always returned £0 silently.
 const PERSON_FLAGS = [
   { key: 'is_disabled', label: 'Disabled' },
   { key: 'is_blind', label: 'Blind' },
   { key: 'is_full_time_student', label: 'Student' },
-  { key: 'is_incapable_of_self_care', label: 'Needs care' },
 ]
 
 function PersonFlagGrid({ person, updatePerson }) {
@@ -179,7 +180,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       student_loan_plan: payload.student_loan_plan || 'NONE',
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
-      people: (payload.people || []).map((person) => ({ kind: person.kind, age: person.age })),
+      people: (payload.people || []).map((person) => ({
+        kind: person.kind,
+        age: person.age,
+        is_carer: Boolean(person.is_carer),
+        care_hours: Number(person.care_hours) || 0,
+      })),
     })
     goToStep('review')
   }
@@ -392,6 +398,22 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                           onChange={(event) => updatePerson(index, { is_pregnant: event.target.checked })}
                         />
                         <span>Pregnant</span>
+                      </label>
+                      <label
+                        className="member-checkbox-label member-checkbox-label--compact"
+                        title="Providing 35+ hours of unpaid care per week — qualifies for Carer's Allowance (~£4,331/yr) but loses it entirely if earnings exceed £196/wk (a hard cliff)."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(person.is_carer)}
+                          onChange={(event) =>
+                            updatePerson(index, {
+                              is_carer: event.target.checked,
+                              care_hours: event.target.checked ? 35 : 0,
+                            })
+                          }
+                        />
+                        <span>Carer (35+ hrs/wk)</span>
                       </label>
                       <PersonFlagGrid
                         person={person}
