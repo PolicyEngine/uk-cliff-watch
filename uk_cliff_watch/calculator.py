@@ -17,6 +17,7 @@ from typing import Any
 
 from uk_cliff_watch.config import (
     BENEFIT_COMPONENTS,
+    DEFAULT_COUNCIL_TAX_BAND,
     DEFAULT_CLIFF_DELTA,
     DEFAULT_SERIES_EARNINGS_BUFFER,
     DEFAULT_SERIES_MAX_EARNINGS,
@@ -32,6 +33,7 @@ from uk_cliff_watch.config import (
     REGION_INFO,
     REGION_NAME_BY_CODE,
     TAX_COMPONENTS,
+    council_tax_for_band,
 )
 
 
@@ -66,6 +68,7 @@ class HouseholdInput:
     childcare_expenses_annual: float = 0.0
     is_renting: bool = True
     savings: float = 0.0  # household capital — the £16k UC cliff
+    council_tax_band: str = DEFAULT_COUNCIL_TAX_BAND  # drives the Council Tax line
 
 
 # --------------------------------------------------------------------------- #
@@ -246,6 +249,15 @@ def _build_situation(payload: HouseholdInput, *, vary_income: bool, point_count:
         household["rent"] = {year: _nonnegative(payload.rent_annual)}
     if payload.savings > 0:
         household["savings"] = {year: _nonnegative(payload.savings)}
+    # Council Tax band -> gross annual liability. policyengine-uk treats
+    # `council_tax` as a survey input on synthetic households, so we both record
+    # the band (used by band-dependent variables) and set the implied bill so the
+    # Council Tax line reflects a real figure instead of £0.
+    if payload.council_tax_band:
+        household["council_tax_band"] = {year: payload.council_tax_band}
+        council_tax = council_tax_for_band(payload.council_tax_band)
+        if council_tax > 0:
+            household["council_tax"] = {year: council_tax}
     benunit: dict[str, Any] = {"members": member_ids}
     if payload.rent_annual > 0:
         benunit["benunit_is_renting"] = {year: bool(payload.is_renting)}
@@ -384,6 +396,7 @@ def calculate_household(payload: HouseholdInput, *, delta: int = DEFAULT_CLIFF_D
             "year": payload.year,
             "rent_annual": payload.rent_annual,
             "childcare_expenses_annual": payload.childcare_expenses_annual,
+            "council_tax_band": payload.council_tax_band,
             "people": [
                 {"kind": p["kind"], "age": p["age"], "is_disabled": p["is_disabled"]}
                 for p in descriptor["people"]
@@ -648,6 +661,7 @@ def household_input_from_dict(data: dict[str, Any]) -> HouseholdInput:
         childcare_expenses_annual=numeric("childcare_expenses_annual"),
         is_renting=bool(data.get("is_renting", numeric("rent_annual") > 0)),
         savings=numeric("savings"),
+        council_tax_band=str(data.get("council_tax_band") or DEFAULT_COUNCIL_TAX_BAND).upper(),
     )
 
 

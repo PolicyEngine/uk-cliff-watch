@@ -99,6 +99,9 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
   const maxDependents = Math.max(0, Number(metadata?.defaults?.max_dependents) || 6)
   const regions = metadata?.regions || []
   const presets = metadata?.presets || []
+  const councilTaxBands = metadata?.council_tax_bands?.length
+    ? metadata.council_tax_bands
+    : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((code) => ({ code, label: `Band ${code}` }))
   const selectedRegion = regions.find((region) => region.code === inputs?.region)
   const regionName = selectedRegion?.name || inputs?.region || 'Missing'
 
@@ -175,6 +178,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       rent_annual: payload.rent_annual ?? 0,
       childcare_expenses_annual: payload.childcare_expenses_annual ?? 0,
       savings: payload.savings ?? 0,
+      council_tax_band: payload.council_tax_band ?? inputs?.council_tax_band ?? 'D',
       is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
@@ -541,6 +545,20 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                       onChange={(value) => update({ rent_annual: value })}
                       tooltip="Annual rent. Drives Housing Benefit and the Universal Credit housing element."
                     />
+                  </div>
+                  <div className="advanced-field-grid">
+                    <div className="form-group">
+                      <label htmlFor="council_tax_band">Council tax band</label>
+                      <select
+                        id="council_tax_band"
+                        value={inputs.council_tax_band || 'D'}
+                        onChange={(event) => update({ council_tax_band: event.target.value })}
+                      >
+                        {councilTaxBands.map((band) => (
+                          <option key={band.code} value={band.code}>{band.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </section>
 

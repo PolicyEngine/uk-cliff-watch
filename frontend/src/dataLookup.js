@@ -57,6 +57,17 @@ const MAX_ADULTS_FALLBACK = 2
 const MAX_DEPENDENTS_FALLBACK = 6
 const MIN_ADULT_AGE = 16
 const MAX_AGE = 120
+const DEFAULT_COUNCIL_TAX_BAND = 'D'
+
+const normalizeCouncilTaxBand = (band, metadata) => {
+  const bands = (metadata?.council_tax_bands || []).map((b) => b.code)
+  const fallback = metadata?.defaults?.council_tax_band || DEFAULT_COUNCIL_TAX_BAND
+  const candidate = String(band || '').toUpperCase()
+  if (candidate && (!bands.length || bands.includes(candidate))) {
+    return candidate
+  }
+  return fallback
+}
 
 const nonnegative = (value) => Math.max(0, Number(value) || 0)
 
@@ -141,6 +152,7 @@ export function reconcileInputs(inputs, metadata) {
     rent_annual: nonnegative(inputs?.rent_annual),
     childcare_expenses_annual: nonnegative(inputs?.childcare_expenses_annual),
     savings: nonnegative(inputs?.savings),
+    council_tax_band: normalizeCouncilTaxBand(inputs?.council_tax_band, metadata),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
     chart_max_earned_income: Math.max(
       10000,
@@ -161,6 +173,7 @@ export function createInitialInputs(metadata) {
     people: normalizePeople(defaultPeople, metadata),
     rent_annual: defaults.rent_annual || 0,
     childcare_expenses_annual: 0,
+    council_tax_band: defaults.council_tax_band || DEFAULT_COUNCIL_TAX_BAND,
     is_renting: true,
     chart_max_earned_income:
       defaults.chart_max_earned_income
@@ -182,6 +195,7 @@ export function buildHouseholdPayload(inputs, metadata) {
     rent_annual: normalized.rent_annual,
     childcare_expenses_annual: normalized.childcare_expenses_annual,
     savings: normalized.savings,
+    council_tax_band: normalized.council_tax_band,
     is_renting: normalized.is_renting,
     people: normalized.people,
   }

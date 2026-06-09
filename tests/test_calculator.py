@@ -12,6 +12,8 @@ NORTH_WEST, rent_annual £9 000, earned_income £0.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from uk_cliff_watch.calculator import (
@@ -272,3 +274,43 @@ def test_single_adult_zero_earnings_no_crash():
     assert result["totals"]["net_income"] >= 0, (
         f"net_income should be >= 0, got {result['totals']['net_income']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 10: Council Tax band drives a real (non-zero) Council Tax line, and a
+# higher band yields a higher charge / lower net income.
+# ---------------------------------------------------------------------------
+
+def test_council_tax_band_drives_council_tax():
+    base = HouseholdInput(
+        region="LONDON",
+        earned_income=30_000,
+        people=(HouseholdMemberInput(age=35, kind="adult"),),
+    )
+    band_a = calculate_household(replace(base, council_tax_band="A"))
+    band_d = calculate_household(replace(base, council_tax_band="D"))
+    band_h = calculate_household(replace(base, council_tax_band="H"))
+
+    # Council Tax is no longer £0.
+    assert band_d["taxes"]["council_tax"] > 0
+    # Higher bands cost more...
+    assert band_a["taxes"]["council_tax"] < band_d["taxes"]["council_tax"] < band_h["taxes"]["council_tax"]
+    # ...which lowers net income monotonically.
+    assert band_a["totals"]["net_income"] > band_d["totals"]["net_income"] > band_h["totals"]["net_income"]
+
+
+def test_council_tax_band_defaults_to_d_and_parses():
+    default_payload = HouseholdInput(
+        region="NORTH_WEST",
+        earned_income=0,
+        people=(HouseholdMemberInput(age=30, kind="adult"),),
+    )
+    assert default_payload.council_tax_band == "D"
+
+    parsed = household_input_from_dict({
+        "region": "NORTH_WEST",
+        "earned_income": 0,
+        "council_tax_band": "g",  # lower-case should normalise
+        "people": [{"age": 30, "kind": "adult"}],
+    })
+    assert parsed.council_tax_band == "G"
