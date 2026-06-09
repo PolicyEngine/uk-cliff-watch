@@ -113,6 +113,7 @@ export function normalizePeople(people = [], metadata) {
       dependentCount += 1
     }
 
+    const isCarer = kind === 'adult' && Boolean(person?.is_carer)
     return [{
       kind,
       age: normalizeAge(person?.age, kind === 'adult' ? MIN_ADULT_AGE : 0),
@@ -121,6 +122,8 @@ export function normalizePeople(people = [], metadata) {
       is_full_time_student: Boolean(person?.is_full_time_student),
       is_incapable_of_self_care: Boolean(person?.is_incapable_of_self_care),
       is_pregnant: Boolean(person?.is_pregnant),
+      is_carer: isCarer,
+      care_hours: isCarer ? Math.max(35, Number(person?.care_hours) || 35) : 0,
     }]
   })
 }

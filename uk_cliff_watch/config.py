@@ -102,6 +102,28 @@ BENEFIT_COMPONENTS = [
         "short_label": "FSM",
         "description": "Value of free school meals for eligible children.",
     },
+    {
+        "key": "carers_allowance",
+        "variable": "carers_allowance",
+        "label": "Carer's Allowance",
+        "short_label": "CA",
+        "description": (
+            "Carer's Allowance (~£83.30/week, £4,331/yr) — paid when the carer "
+            "provides ≥35 hours of unpaid care.  Abolished entirely if the carer's "
+            "net earnings exceed £196/week (£10,192/yr): a hard cliff."
+        ),
+    },
+    {
+        "key": "uc_carer_element",
+        "variable": "uc_carer_element",
+        "label": "UC carer element",
+        "short_label": "UC carer",
+        "description": (
+            "Universal Credit carer element (~£2,901/yr in 2025/26), added to the UC "
+            "award when the claimant is entitled to Carer's Allowance.  Unlike CA "
+            "itself this element tapers away gradually with the UC earnings taper."
+        ),
+    },
 ]
 
 # Tax components subtracted from market income + support.
@@ -289,6 +311,27 @@ PRESETS = [
             "is_renting": True,
             "people": [
                 {"kind": "adult", "age": 30},
+            ],
+        },
+    },
+    {
+        "id": "carers_allowance_cliff",
+        "label": "Carer's Allowance cliff",
+        "tagline": "Single carer, 35+ hrs/week, modest rent",
+        "description": (
+            "A single adult providing 35+ hours of unpaid care, renting in the "
+            "North West.  Carer's Allowance (~£4,331/yr) is cut to zero the "
+            "moment net earnings exceed £196/week (£10,192/yr) — one of the "
+            "sharpest hard cliffs in the UK benefit system."
+        ),
+        "payload": {
+            "region": "NORTH_WEST",
+            "earned_income": 8000,
+            "rent_annual": 7200,
+            "childcare_expenses_annual": 0,
+            "is_renting": True,
+            "people": [
+                {"kind": "adult", "age": 40, "is_carer": True, "care_hours": 35},
             ],
         },
     },
