@@ -179,7 +179,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
-      people: (payload.people || []).map((person) => ({ kind: person.kind, age: person.age })),
+      people: (payload.people || []).map((person) => ({
+        kind: person.kind,
+        age: person.age,
+        is_carer: Boolean(person.is_carer),
+        care_hours: Number(person.care_hours) || 0,
+      })),
     })
     goToStep('review')
   }
@@ -392,6 +397,22 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                           onChange={(event) => updatePerson(index, { is_pregnant: event.target.checked })}
                         />
                         <span>Pregnant</span>
+                      </label>
+                      <label
+                        className="member-checkbox-label member-checkbox-label--compact"
+                        title="Providing 35+ hours of unpaid care per week — qualifies for Carer's Allowance (~£4,331/yr) but loses it entirely if earnings exceed £196/wk (a hard cliff)."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(person.is_carer)}
+                          onChange={(event) =>
+                            updatePerson(index, {
+                              is_carer: event.target.checked,
+                              care_hours: event.target.checked ? 35 : 0,
+                            })
+                          }
+                        />
+                        <span>Carer (35+ hrs/wk)</span>
                       </label>
                       <PersonFlagGrid
                         person={person}
