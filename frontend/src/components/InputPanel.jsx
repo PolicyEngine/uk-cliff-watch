@@ -21,13 +21,14 @@ const WIZARD_STEPS = [
   { id: 'review', label: 'Review' },
 ]
 
-// Person flags. Disabled/Blind/Needs care map to real policyengine-uk inputs;
-// Student is carried for parity with limited modelling.
+// Person flags. Disabled/Blind map to real policyengine-uk inputs.
+// Student is carried for parity (no UK PE input currently).
+// "Needs care" (is_severely_disabled / is_incapable_of_self_care) was removed:
+// it had no formula in policyengine-uk and always returned £0 silently.
 const PERSON_FLAGS = [
   { key: 'is_disabled', label: 'Disabled' },
   { key: 'is_blind', label: 'Blind' },
   { key: 'is_full_time_student', label: 'Student' },
-  { key: 'is_incapable_of_self_care', label: 'Needs care' },
 ]
 
 function PersonFlagGrid({ person, updatePerson }) {
@@ -180,9 +181,15 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       savings: payload.savings ?? 0,
       council_tax_band: payload.council_tax_band ?? inputs?.council_tax_band ?? 'D',
       is_renting: payload.is_renting ?? (payload.rent_annual ?? 0) > 0,
+      student_loan_plan: payload.student_loan_plan || 'NONE',
       chart_max_earned_income: inputs?.chart_max_earned_income
         || metadata?.defaults?.chart_max_earned_income || 130000,
-      people: (payload.people || []).map((person) => ({ kind: person.kind, age: person.age })),
+      people: (payload.people || []).map((person) => ({
+        kind: person.kind,
+        age: person.age,
+        is_carer: Boolean(person.is_carer),
+        care_hours: Number(person.care_hours) || 0,
+      })),
     })
     goToStep('review')
   }
@@ -396,6 +403,22 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                         />
                         <span>Pregnant</span>
                       </label>
+                      <label
+                        className="member-checkbox-label member-checkbox-label--compact"
+                        title="Providing 35+ hours of unpaid care per week — qualifies for Carer's Allowance (~£4,331/yr) but loses it entirely if earnings exceed £196/wk (a hard cliff)."
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(person.is_carer)}
+                          onChange={(event) =>
+                            updatePerson(index, {
+                              is_carer: event.target.checked,
+                              care_hours: event.target.checked ? 35 : 0,
+                            })
+                          }
+                        />
+                        <span>Carer (35+ hrs/wk)</span>
+                      </label>
                       <PersonFlagGrid
                         person={person}
                         updatePerson={(partial) => updatePerson(index, partial)}
@@ -585,6 +608,30 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                       onChange={(value) => update({ savings: value })}
                       tooltip="Total household savings and capital. Universal Credit tapers from £6,000 and stops entirely above £16,000 — a hard cliff."
                     />
+                  </div>
+                </section>
+
+                <section className="advanced-section">
+                  <h3 className="advanced-section-title">Student loan</h3>
+                  <div className="advanced-field-grid">
+                    <div className="form-group">
+                      <label htmlFor="student_loan_plan">
+                        Plan (primary earner)
+                        <InfoTooltip text="Repayments are 9% of income above the threshold (Plan 1: ~£24,990; Plan 2: ~£27,295; Plan 4: ~£31,395; Plan 5: ~£25,000) or 6% for Postgraduate above £21,000. These appear as a marginal-rate band on the chart." />
+                      </label>
+                      <select
+                        id="student_loan_plan"
+                        value={inputs.student_loan_plan || 'NONE'}
+                        onChange={(event) => update({ student_loan_plan: event.target.value })}
+                      >
+                        <option value="NONE">None</option>
+                        <option value="PLAN_1">Plan 1</option>
+                        <option value="PLAN_2">Plan 2</option>
+                        <option value="PLAN_4">Plan 4 (Scotland)</option>
+                        <option value="PLAN_5">Plan 5</option>
+                        <option value="POSTGRADUATE">Postgraduate</option>
+                      </select>
+                    </div>
                   </div>
                 </section>
               </div>
