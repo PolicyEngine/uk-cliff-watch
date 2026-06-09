@@ -124,6 +124,7 @@ export function normalizePeople(people = [], metadata) {
       dependentCount += 1
     }
 
+    const isCarer = kind === 'adult' && Boolean(person?.is_carer)
     return [{
       kind,
       age: normalizeAge(person?.age, kind === 'adult' ? MIN_ADULT_AGE : 0),
@@ -132,6 +133,8 @@ export function normalizePeople(people = [], metadata) {
       is_full_time_student: Boolean(person?.is_full_time_student),
       is_incapable_of_self_care: Boolean(person?.is_incapable_of_self_care),
       is_pregnant: Boolean(person?.is_pregnant),
+      is_carer: isCarer,
+      care_hours: isCarer ? Math.max(35, Number(person?.care_hours) || 35) : 0,
     }]
   })
 }
@@ -154,6 +157,7 @@ export function reconcileInputs(inputs, metadata) {
     savings: nonnegative(inputs?.savings),
     council_tax_band: normalizeCouncilTaxBand(inputs?.council_tax_band, metadata),
     is_renting: inputs?.is_renting !== undefined ? Boolean(inputs.is_renting) : true,
+    student_loan_plan: inputs?.student_loan_plan || 'NONE',
     chart_max_earned_income: Math.max(
       10000,
       Number(inputs?.chart_max_earned_income) || defaultChartMax,
@@ -175,6 +179,7 @@ export function createInitialInputs(metadata) {
     childcare_expenses_annual: 0,
     council_tax_band: defaults.council_tax_band || DEFAULT_COUNCIL_TAX_BAND,
     is_renting: true,
+    student_loan_plan: 'NONE',
     chart_max_earned_income:
       defaults.chart_max_earned_income
       || defaults.series_max_earned_income
@@ -197,6 +202,7 @@ export function buildHouseholdPayload(inputs, metadata) {
     savings: normalized.savings,
     council_tax_band: normalized.council_tax_band,
     is_renting: normalized.is_renting,
+    student_loan_plan: normalized.student_loan_plan || 'NONE',
     people: normalized.people,
   }
 }
