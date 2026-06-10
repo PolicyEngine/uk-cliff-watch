@@ -190,6 +190,14 @@ function buildUkProgramAreaSeries(metadata) {
   })
 }
 
+// X-axis ticks that end exactly at the last sampled earnings value instead of
+// rounding the axis up to the next "nice" boundary past the data.
+function cappedXTicks(maxValue) {
+  const ticks = niceTicks(maxValue).filter((tick) => tick <= maxValue)
+  if (!ticks.length || ticks[ticks.length - 1] < maxValue) ticks.push(maxValue)
+  return ticks
+}
+
 function chooseNiceStep(rawStep) {
   const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)))
   const normalized = rawStep / magnitude
@@ -233,7 +241,7 @@ function BenefitChart({
   const [detailVisibleKeys, setDetailVisibleKeys] = useState({})
   const [showCliffHighlights, setShowCliffHighlights] = useState(true)
   const [showNotchHighlights, setShowNotchHighlights] = useState(true)
-  const [showMtr, setShowMtr] = useState(false)
+  const [showMtr, setShowMtr] = useState(true)
   const hasRealData = Boolean(data?.length)
   const householdCostDefinitions = useMemo(
     () => getHouseholdCostDefinitions(metadata),
@@ -450,7 +458,7 @@ function BenefitChart({
     if (!annualizedData.length || (!hasRealData && loading)) {
       const placeholderDetailTicks = signedNiceTicks(-20000, Math.max(placeholderMaxEarnedIncome, 50000))
       return {
-        xTicks: niceTicks(placeholderMaxEarnedIncome),
+        xTicks: cappedXTicks(placeholderMaxEarnedIncome),
         netYTicks: niceTicks(Math.max(placeholderMaxEarnedIncome, 50000)),
         detailYTicks: placeholderDetailTicks,
         detailDomain: [
@@ -489,7 +497,7 @@ function BenefitChart({
     const computedDetailYTicks = signedNiceTicks(detailMin, detailMax)
 
     return {
-      xTicks: niceTicks(xMax),
+      xTicks: cappedXTicks(xMax),
       netYTicks: niceTicks(netYMax),
       detailYTicks: computedDetailYTicks,
       detailDomain: [

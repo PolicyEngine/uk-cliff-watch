@@ -774,16 +774,22 @@ body {
 }
 
 .person-option-grid {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.28fr) minmax(0, 1fr);
-  gap: 0.65rem;
-  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
 }
 
+/* Flags render as siblings of the other checkbox chips so every option
+   wraps as a uniform, full-label chip instead of being squeezed into a
+   narrow grid column. */
 .person-flag-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  display: contents;
+}
+
+.person-option-grid .member-checkbox-label--compact {
+  flex: 0 1 auto;
+  min-width: max-content;
 }
 
 .dependent-card-grid {
@@ -2126,12 +2132,7 @@ body {
 
   .person-card-fields,
   .person-card-fields--dependent,
-  .person-option-grid,
   .program-checkbox-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .person-flag-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2228,10 +2229,12 @@ body {
   .advanced-field-grid--two,
   .person-card-fields,
   .person-card-fields--dependent,
-  .person-option-grid,
-  .person-flag-grid,
   .program-checkbox-grid {
     grid-template-columns: 1fr;
+  }
+
+  .person-option-grid .member-checkbox-label--compact {
+    flex: 1 1 100%;
   }
 
   .program-mode-toggle {
@@ -2335,21 +2338,40 @@ body {
   }
 }
 
-/* UK quick-start scenario chips (sit above the wizard progress) */
+/* UK quick-start scenario panel (sits above the wizard progress) */
 .wizard-quickstart {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin: 0.25rem 0 1rem;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0.25rem 0 1.1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #f8fafc;
+}
+.wizard-quickstart-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 .wizard-quickstart-label {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #6b7280;
-  margin-right: 0.25rem;
+  color: #0d9488;
+}
+.wizard-quickstart-copy {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #64748b;
+  max-width: 60ch;
+}
+.wizard-quickstart-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 .wizard-quickstart-chip {
   font-size: 0.8rem;

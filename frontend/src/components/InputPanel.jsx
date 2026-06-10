@@ -257,18 +257,28 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       <h2>Household information</h2>
       {presets.length ? (
         <div className="wizard-quickstart">
-          <span className="wizard-quickstart-label">Quick start</span>
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              className="member-add-btn wizard-quickstart-chip"
-              onClick={() => applyPreset(preset)}
-              title={preset.description}
-            >
-              {preset.label}
-            </button>
-          ))}
+          <div className="wizard-quickstart-heading">
+            <span className="wizard-quickstart-label">Quick start</span>
+            <p className="wizard-quickstart-copy">
+              In a hurry? Pick a ready-made example household instead of filling
+              in the steps below. Each scenario demonstrates a well-known benefit
+              cliff or tax trap — it jumps straight to the review step, where you
+              can still tweak any detail before calculating.
+            </p>
+          </div>
+          <div className="wizard-quickstart-chips">
+            {presets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="member-add-btn wizard-quickstart-chip"
+                onClick={() => applyPreset(preset)}
+                title={preset.description}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
       <WizardProgress
@@ -504,10 +514,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                         </label>
                       </div>
 
-                      <PersonFlagGrid
-                        person={person}
-                        updatePerson={(partial) => updatePerson(index, partial)}
-                      />
+                      <div className="person-option-grid">
+                        <PersonFlagGrid
+                          person={person}
+                          updatePerson={(partial) => updatePerson(index, partial)}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>

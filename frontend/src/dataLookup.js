@@ -172,8 +172,14 @@ export function reconcileInputs(inputs, metadata) {
 
 export function createInitialInputs(metadata) {
   const defaults = metadata?.defaults || {}
-  const defaultPeople = Array.isArray(defaults.people) && defaults.people.length
-    ? defaults.people
+  // Start the wizard with adults only so the dependents step can ask
+  // "Any dependents?" before any children exist. Presets and shared URLs
+  // still seed children explicitly.
+  const defaultAdults = Array.isArray(defaults.people)
+    ? defaults.people.filter((person) => person.kind !== 'child')
+    : []
+  const defaultPeople = defaultAdults.length
+    ? defaultAdults
     : [{ kind: 'adult', age: 35 }]
 
   return reconcileInputs({
