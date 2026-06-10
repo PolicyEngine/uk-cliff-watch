@@ -2369,9 +2369,42 @@ body {
 }
 .wizard-quickstart-chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
 }
 .wizard-quickstart-chip {
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  padding: 0.26rem 0.42rem;
+  white-space: nowrap;
+}
+.wizard-quickstart-kind {
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.32rem;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+.wizard-quickstart-kind--cliff {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.wizard-quickstart-kind--taper {
+  background: #fef3c7;
+  color: #b45309;
+}
+.wizard-quickstart-kind--notch {
+  background: #d1fae5;
+  color: #047857;
+}
+.wizard-quickstart-kind--household {
+  background: #e2e8f0;
+  color: #475569;
 }

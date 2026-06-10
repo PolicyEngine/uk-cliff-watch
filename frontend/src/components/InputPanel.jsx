@@ -260,10 +260,13 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
           <div className="wizard-quickstart-heading">
             <span className="wizard-quickstart-label">Quick start</span>
             <p className="wizard-quickstart-copy">
-              In a hurry? Pick a ready-made example household instead of filling
-              in the steps below. Each scenario demonstrates a well-known benefit
-              cliff or tax trap — it jumps straight to the review step, where you
-              can still tweak any detail before calculating.
+              You can pick a ready-made example household instead of filling in
+              the steps below — each button jumps straight to the review step,
+              where you can still tweak any detail before calculating. The tag on
+              each button says what it shows: a <strong>cliff</strong> (net income
+              falls as pay rises), a <strong>taper</strong> (a stretch of very
+              high marginal rates), a <strong>notch</strong> (net income jumps up
+              in one step), or a typical <strong>household</strong> type.
             </p>
           </div>
           <div className="wizard-quickstart-chips">
@@ -275,7 +278,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                 onClick={() => applyPreset(preset)}
                 title={preset.description}
               >
-                {preset.label}
+                <span>{preset.label}</span>
+                {preset.kind ? (
+                  <span className={`wizard-quickstart-kind wizard-quickstart-kind--${preset.kind}`}>
+                    {preset.kind}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>

@@ -252,7 +252,8 @@ HOUSEHOLD_TYPE_BY_ID = {item["id"]: item for item in HOUSEHOLD_TYPES}
 PRESETS = [
     {
         "id": "uc_taper",
-        "label": "Universal Credit taper",
+        "kind": "taper",
+        "label": "Universal Credit",
         "tagline": "Lone parent, 2 children, renting",
         "description": (
             "A lone parent with two young children renting in the North West. The "
@@ -274,6 +275,7 @@ PRESETS = [
     },
     {
         "id": "hundred_k_trap",
+        "kind": "taper",
         "label": "The £100k trap",
         "tagline": "Single earner, 2 children",
         "description": (
@@ -297,7 +299,8 @@ PRESETS = [
     },
     {
         "id": "childcare_cliff",
-        "label": "The £100k childcare cliff",
+        "kind": "cliff",
+        "label": "£100k childcare",
         "tagline": "One earner, young child, nursery fees",
         "description": (
             "A single earner with a nursery-age child and childcare costs. At "
@@ -319,11 +322,14 @@ PRESETS = [
     },
     {
         "id": "couple_2_kids",
+        "kind": "household",
         "label": "Couple, 2 children",
         "tagline": "One earner, renting",
         "description": (
-            "A couple with two children, one primary earner, renting in the North "
-            "West — the household type most exposed to the Universal Credit taper."
+            "A typical household type, not a specific trap: a couple with two "
+            "children, one primary earner, renting in the North West. Its curve "
+            "mainly shows the Universal Credit 55% taper — the household type "
+            "most exposed to it."
         ),
         "payload": {
             "region": "NORTH_WEST",
@@ -341,14 +347,14 @@ PRESETS = [
     },
     {
         "id": "pension_credit",
-        "label": "Pensioner on Pension Credit",
+        "kind": "household",
+        "label": "Pensioner couple",
         "tagline": "Retired couple, small private pension",
         "description": (
-            "A retired couple, both aged 68, with a small private pension and no "
-            "earnings. Means-tested Pension Credit tops up their income; each extra "
-            "pound of private pension withdraws Pension Credit pound-for-pound, a "
-            "100% marginal rate that the earnings chart and the pension-income input "
-            "now make visible."
+            "A typical household type: a retired couple, both aged 68, with a "
+            "small private pension and no earnings. Means-tested Pension Credit "
+            "tops up their income; each extra pound of private pension withdraws "
+            "Pension Credit pound-for-pound — a 100% taper, not a cliff."
         ),
         "payload": {
             "region": "NORTH_WEST",
@@ -365,11 +371,14 @@ PRESETS = [
     },
     {
         "id": "single_no_kids",
+        "kind": "household",
         "label": "Single adult",
         "tagline": "No children, renting",
         "description": (
-            "A single working-age adult with no children, renting — the baseline "
-            "case with a much smaller benefit footprint."
+            "A typical household type: a single working-age adult with no "
+            "children, renting. The baseline case with a much smaller benefit "
+            "footprint — mostly the Universal Credit taper at low earnings, then "
+            "Income Tax and National Insurance."
         ),
         "payload": {
             "region": "NORTH_WEST",
@@ -384,7 +393,8 @@ PRESETS = [
     },
     {
         "id": "benefit_cap_notch",
-        "label": "Benefit-cap notch",
+        "kind": "notch",
+        "label": "Benefit cap",
         "tagline": "Lone parent, 4 children, London, high rent",
         "description": (
             "A lone parent with four young children renting in London at £24,000/yr. "
@@ -412,7 +422,8 @@ PRESETS = [
     },
     {
         "id": "carers_allowance_cliff",
-        "label": "Carer's Allowance cliff",
+        "kind": "cliff",
+        "label": "Carer's Allowance",
         "tagline": "Single carer, 35+ hrs/week, modest rent",
         "description": (
             "A single adult providing 35+ hours of unpaid care, renting in the "
