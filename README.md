@@ -2,6 +2,8 @@
 
 Dynamic benefit-cliff and marginal-rate explorer for UK households, built on PolicyEngine UK.
 
+**Live dashboard:** https://uk-cliff-watch.vercel.app
+
 ---
 
 ## What this shows
