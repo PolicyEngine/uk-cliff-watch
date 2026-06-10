@@ -2366,7 +2366,6 @@ body {
   font-size: 0.82rem;
   line-height: 1.5;
   color: #64748b;
-  max-width: 60ch;
 }
 .wizard-quickstart-chips {
   display: flex;
