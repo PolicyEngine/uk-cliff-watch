@@ -21,7 +21,7 @@ dev = [
 uk-cliff-watch-dev-server = "uk_cliff_watch.dev_server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["uk_cliff_watch"]
+packages = ["uk_cliff_watch", "api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

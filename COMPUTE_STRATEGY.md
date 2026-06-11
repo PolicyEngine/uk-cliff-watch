@@ -2,9 +2,9 @@
 
 ## Why compute on demand rather than precomputing
 
-The full combinatorial space of (region × household composition × earnings point) is large. There are 12 UK ITL-1 regions, 4 canonical household templates plus arbitrary custom compositions, and a default earnings curve of 161 points from £0 to £80,000. A complete precomputed grid would require thousands of PolicyEngine UK simulations to be run offline, serialised to disk, and kept in sync every time `policyengine-uk` is updated. Any policy change in the upstream package would silently invalidate the stored results unless the entire grid was regenerated.
+The full combinatorial space of (region × household composition × earnings point) is large. There are 12 UK ITL-1 regions, 4 canonical household templates plus arbitrary custom compositions, and a default earnings curve of 271 points from £0 to £135,000. A complete precomputed grid would require thousands of PolicyEngine UK simulations to be run offline, serialised to disk, and kept in sync every time `policyengine-uk` is updated. Any policy change in the upstream package would silently invalidate the stored results unless the entire grid was regenerated.
 
-PolicyEngine UK evaluates a single household in well under a second in most cases. An earnings-curve series (161 points, resolved in one axis sweep by the PolicyEngine simulation engine) typically completes in 1–5 seconds. A regions call (the same earnings point evaluated 12 times in sequence) similarly completes in a few seconds. These latencies are acceptable for an interactive web tool where a user has just changed a parameter and expects a brief loading state.
+PolicyEngine UK evaluates a single household in well under a second in most cases. An earnings-curve series (271 points, resolved in one axis sweep by the PolicyEngine simulation engine) typically completes in a few seconds. A regions call (the same earnings point evaluated 12 times in sequence) similarly completes in a few seconds. These latencies are acceptable for an interactive web tool where a user has just changed a parameter and expects a brief loading state.
 
 ## Caching
 
@@ -16,8 +16,8 @@ In the local dev server (`uk_cliff_watch.dev_server`) the process is long-lived,
 
 Each simulation covers:
 
-- **Benefits**: Universal Credit (55% taper above the work allowance), Child Benefit (subject to the High-Income Child Benefit Charge above £60,000), Child Tax Credit, Working Tax Credit, Housing Benefit, Council Tax Reduction, Pension Credit, Tax-Free Childcare (hard cliff at £100,000 adjusted net income), Free School Meals.
-- **Taxes**: Income Tax (including the 60% effective rate between £100,000 and £125,140 as the personal allowance is withdrawn), employee Class 1 National Insurance, Council Tax (net of any reduction).
+- **Benefits**: Universal Credit (55% taper above the work allowance), Child Benefit (subject to the High-Income Child Benefit Charge above £60,000), Child Tax Credit, Working Tax Credit, Housing Benefit, Pension Credit, Tax-Free Childcare (hard cliff at £100,000 adjusted net income), free childcare hours, Carer's Allowance, UC carer element.
+- **Taxes and repayments**: Income Tax (including the 60% effective rate between £100,000 and £125,140 as the personal allowance is withdrawn), employee Class 1 National Insurance, Council Tax, Student Loan Repayment.
 
 The benefit and tax variable names are listed in `uk_cliff_watch/config.py` (`BENEFIT_COMPONENTS`, `TAX_COMPONENTS`) and map directly to `policyengine-uk` variable names passed to `Simulation.calculate()`.
 

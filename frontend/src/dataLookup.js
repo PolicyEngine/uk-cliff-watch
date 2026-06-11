@@ -10,7 +10,9 @@ const parseErrorMessage = async (response) => {
 }
 
 const apiPath = (path) => {
-  const origin = process.env.NEXT_PUBLIC_CLIFF_WATCH_API_ORIGIN || ''
+  const origin = process.env.NEXT_PUBLIC_API_ORIGIN
+    || process.env.NEXT_PUBLIC_CLIFF_WATCH_API_ORIGIN
+    || ''
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || ''
   const prefix = origin || basePath
   if (!prefix) return path

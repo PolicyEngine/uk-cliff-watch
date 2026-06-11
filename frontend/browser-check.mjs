@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-const BASE = process.env.CHECK_URL || 'http://127.0.0.1:4399';
+const BASE = process.env.CHECK_URL || 'http://localhost:3000';
 const consoleErrors = [];
 const pageErrors = [];
 
@@ -11,7 +11,7 @@ page.on('pageerror', (e) => pageErrors.push(e.message));
 
 console.log('goto', BASE);
 await page.goto(BASE, { waitUntil: 'networkidle', timeout: 60000 });
-await page.waitForTimeout(2500);
+await page.getByRole('heading', { name: 'Household information' }).waitFor({ timeout: 60000 });
 
 // List the buttons we can see (to locate the calculate action).
 const buttonTexts = await page.locator('button').allInnerTexts();
@@ -19,7 +19,11 @@ console.log('BUTTONS:', JSON.stringify(buttonTexts.slice(0, 20)));
 
 await page.screenshot({ path: 'ported-initial.png', fullPage: true });
 
-// Trigger the calculation (the US flow uses a "Find cliffs" button).
+// Choose a complete preset, then trigger the calculation.
+const preset = page.getByRole('button', { name: /Universal Credit/i }).first();
+if (await preset.count()) {
+  await preset.click();
+}
 const calc = page.getByRole('button', { name: /find cliffs|cliffs|calculate/i }).first();
 let clicked = false;
 if (await calc.count()) {

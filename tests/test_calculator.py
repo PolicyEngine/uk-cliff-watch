@@ -153,6 +153,21 @@ def test_income_series_high_marginal_rate_point(income_series):
     )
 
 
+def test_income_series_respects_min_earned_income(lone_parent_payload):
+    """Refinement calls can request a small earnings window instead of forcing
+    the full chart range from £0."""
+    series = calculate_income_series(
+        lone_parent_payload,
+        min_earned_income=20_000,
+        max_earned_income=22_000,
+        step=500,
+    )
+
+    assert series["data"][0]["earned_income"] == 20_000
+    assert series["data"][-1]["earned_income"] == 22_000
+    assert series["point_count"] == 5
+
+
 # ---------------------------------------------------------------------------
 # Test 6: region comparison — 12 regions, contiguous ranks, London present
 # ---------------------------------------------------------------------------
@@ -262,8 +277,7 @@ def test_household_input_from_dict_infers_kind():
 
 def test_single_adult_zero_earnings_no_crash():
     """A childless single adult at £0 earned income must not raise and must
-    return a non-negative net_income (Council Tax Reduction might be the only
-    support; UC standard allowance depends on housing status)."""
+    return a non-negative net_income."""
     payload = HouseholdInput(
         region="NORTH_WEST",
         earned_income=0,

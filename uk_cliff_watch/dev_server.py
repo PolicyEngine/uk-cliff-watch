@@ -43,6 +43,7 @@ class DevApiHandler(BaseHTTPRequestHandler):
             elif self.path == "/api/series":
                 response = compute_series(
                     parse_household_payload(payload),
+                    min_earned_income=int(payload.get("min_earned_income", 0)),
                     max_earned_income=int(payload.get("max_earned_income", DEFAULT_SERIES_MAX_EARNINGS)),
                     step=int(payload.get("step", DEFAULT_SERIES_STEP)),
                 )

@@ -98,7 +98,7 @@ const FALLBACK_PROGRAM_COLORS = [
 const PROGRAM_DETAIL_TAX_SERIES = [
   {
     key: 'taxes_annual',
-    label: 'Income tax & NI',
+    label: 'Taxes & repayments',
     type: 'area',
     family: 'tax',
     stroke: '#DC2626',
@@ -580,7 +580,7 @@ function BenefitChart({
             </div>
           ) : null}
           <div className="chart-tooltip-row">
-            <span>Income tax &amp; NI</span>
+            <span>Taxes &amp; repayments</span>
             <span>{fmt(point.taxes_annual)}/yr</span>
           </div>
           {tooltipCliff ? (

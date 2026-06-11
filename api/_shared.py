@@ -82,9 +82,15 @@ def _household_cached(serialized: str) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=256)
-def _series_cached(serialized: str, max_earned_income: int, step: int) -> dict[str, Any]:
+def _series_cached(
+    serialized: str,
+    min_earned_income: int,
+    max_earned_income: int,
+    step: int,
+) -> dict[str, Any]:
     return calculate_income_series(
         parse_household_payload(json.loads(serialized)),
+        min_earned_income=min_earned_income,
         max_earned_income=max_earned_income,
         step=step,
     )
@@ -104,9 +110,14 @@ def compute_household(payload: HouseholdInput) -> dict[str, Any]:
     return _household_cached(_serialize(payload))
 
 
-def compute_series(payload: HouseholdInput, *, max_earned_income: int = DEFAULT_SERIES_MAX_EARNINGS,
-                   step: int = DEFAULT_SERIES_STEP) -> dict[str, Any]:
-    return _series_cached(_serialize(payload), max_earned_income, step)
+def compute_series(
+    payload: HouseholdInput,
+    *,
+    max_earned_income: int = DEFAULT_SERIES_MAX_EARNINGS,
+    step: int = DEFAULT_SERIES_STEP,
+    min_earned_income: int = 0,
+) -> dict[str, Any]:
+    return _series_cached(_serialize(payload), min_earned_income, max_earned_income, step)
 
 
 def compute_regions(payload: HouseholdInput) -> dict[str, Any]:

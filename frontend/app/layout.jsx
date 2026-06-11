@@ -12,7 +12,7 @@ const OG_IMAGE = "https://policyengine.org/uk/cliffwatch/cliffwatch-og.png";
 
 const TITLE = "UK CliffWatch — PolicyEngine benefit cliff & marginal tax rate explorer";
 const DESCRIPTION =
-  "UK CliffWatch maps benefit cliffs and marginal tax rates for UK households: see how Universal Credit, Child Benefit, Housing Benefit, Council Tax Reduction, and other benefits change as earnings rise across all 12 UK regions.";
+  "UK CliffWatch maps benefit cliffs and marginal tax rates for UK households: see how Universal Credit, Child Benefit, Housing Benefit, Tax-Free Childcare, Carer's Allowance, and taxes change as earnings rise across all 12 UK regions.";
 
 export const metadata = {
   metadataBase: new URL("https://policyengine.org"),
@@ -29,14 +29,15 @@ export const metadata = {
     "Universal Credit",
     "Child Benefit",
     "Housing Benefit",
-    "Council Tax Reduction",
     "Working Tax Credit",
     "Child Tax Credit",
     "Pension Credit",
-    "Free School Meals",
     "Tax-Free Childcare",
+    "Carer's Allowance",
     "Income Tax",
     "National Insurance",
+    "Council Tax",
+    "Student Loan Repayment",
     "PolicyEngine",
     "UK benefits",
     "income support",
@@ -134,7 +135,7 @@ const jsonLd = {
     "Plot net household income against earnings for any UK household",
     "Identify benefit cliffs and dead zones",
     "Visualize marginal tax rates across the income distribution",
-    "Break down individual program contributions (Universal Credit, Child Benefit, Housing Benefit, Council Tax Reduction, Income Tax, National Insurance)",
+    "Break down individual program contributions (Universal Credit, Child Benefit, Housing Benefit, Tax-Free Childcare, Carer's Allowance, Income Tax, National Insurance, Council Tax)",
     "All 12 UK regions",
   ],
 };

@@ -42,9 +42,9 @@ export default function Page() {
         <h2>Programs modelled</h2>
         <p>
           Universal Credit, Child Benefit, Child Tax Credit, Working Tax Credit,
-          Housing Benefit, Council Tax Reduction, Pension Credit, Tax-Free
-          Childcare, Free School Meals, Income Tax, National Insurance, and
-          Council Tax.
+          Housing Benefit, Pension Credit, Tax-Free Childcare, free childcare
+          hours, Carer&apos;s Allowance, UC carer element, Income Tax, National
+          Insurance, Council Tax, and Student Loan Repayment.
         </p>
       </section>
       <ClientApp />

@@ -559,17 +559,24 @@ def _round_up(value: int, increment: int) -> int:
     return max(increment, math.ceil(value / increment) * increment)
 
 
+def _round_down(value: int, increment: int) -> int:
+    if increment <= 0:
+        return max(0, value)
+    return max(0, math.floor(value / increment) * increment)
+
+
 def _resolve_max_earnings(payload: HouseholdInput, requested_max: int) -> int:
     floor = max(DEFAULT_SERIES_MIN_EARNINGS_WINDOW,
                 int(payload.earned_income) + DEFAULT_SERIES_EARNINGS_BUFFER)
     return max(floor, requested_max)
 
 
-def _resolve_step(max_earnings: int, requested_step: int) -> int:
+def _resolve_step(max_earnings: int, requested_step: int, min_earnings: int = 0) -> int:
     step = max(1, requested_step)
-    if (max_earnings // step) + 1 <= DEFAULT_SERIES_TARGET_POINTS:
+    span = max(1, max_earnings - max(0, min_earnings))
+    if (span // step) + 1 <= DEFAULT_SERIES_TARGET_POINTS:
         return step
-    minimum = math.ceil(max_earnings / max(1, DEFAULT_SERIES_TARGET_POINTS - 1))
+    minimum = math.ceil(span / max(1, DEFAULT_SERIES_TARGET_POINTS - 1))
     return _round_up(max(step, minimum), DEFAULT_SERIES_STEP_INCREMENT)
 
 
@@ -591,16 +598,25 @@ def _build_cliff_drivers(prev: dict[str, Any], cur: dict[str, Any]) -> list[dict
 
 
 def calculate_income_series(payload: HouseholdInput, *,
+                            min_earned_income: int = 0,
                             max_earned_income: int = DEFAULT_SERIES_MAX_EARNINGS,
                             step: int = DEFAULT_SERIES_STEP) -> dict[str, Any]:
-    eff_max = _resolve_max_earnings(payload, max_earned_income)
-    eff_step = _resolve_step(eff_max, step)
+    requested_min = max(0, int(min_earned_income or 0))
+    eff_max = (
+        max(int(max_earned_income), requested_min + max(1, int(step or DEFAULT_SERIES_STEP)))
+        if requested_min > 0
+        else _resolve_max_earnings(payload, max_earned_income)
+    )
+    eff_step = _resolve_step(eff_max, step, requested_min)
+    aligned_min = _round_down(requested_min, eff_step) if requested_min > 0 else 0
     aligned_max = _round_up(eff_max, eff_step)
-    point_count = max(2, (aligned_max // eff_step) + 1)
+    if aligned_max <= aligned_min:
+        aligned_max = aligned_min + eff_step
+    point_count = max(2, ((aligned_max - aligned_min) // eff_step) + 1)
 
     Simulation = _load_simulation()
     situation = _build_situation(payload, vary_income=True, point_count=point_count,
-                                 min_earnings=0, max_earnings=aligned_max)
+                                 min_earnings=aligned_min, max_earnings=aligned_max)
     simulation = Simulation(situation=situation)
     year = payload.year
 
@@ -708,8 +724,10 @@ def calculate_income_series(payload: HouseholdInput, *,
     return {
         "data": data,
         "step_annual": eff_step,
+        "min_earned_income": data[0]["earned_income"] if data else aligned_min,
         "requested_step_annual": step,
         "max_earned_income": data[-1]["earned_income"] if data else 0,
+        "requested_min_earned_income": min_earned_income,
         "requested_max_earned_income": max_earned_income,
         "point_count": len(data),
         "max_net_income": max((d["net_income"] for d in data), default=0),
@@ -822,6 +840,7 @@ def _parse_args() -> argparse.Namespace:
                         help="Path to input JSON, or '-' for stdin.")
     parser.add_argument("--mode", choices=["household", "series", "regions", "households"],
                         default="household")
+    parser.add_argument("--min-earned-income", type=int, default=0)
     parser.add_argument("--max-earned-income", type=int, default=DEFAULT_SERIES_MAX_EARNINGS)
     parser.add_argument("--step", type=int, default=DEFAULT_SERIES_STEP)
     parser.add_argument("--delta", type=int, default=DEFAULT_CLIFF_DELTA)
@@ -840,7 +859,12 @@ def main() -> None:
     if args.mode == "household":
         output: Any = calculate_household(payload, delta=args.delta)
     elif args.mode == "series":
-        output = calculate_income_series(payload, max_earned_income=args.max_earned_income, step=args.step)
+        output = calculate_income_series(
+            payload,
+            min_earned_income=args.min_earned_income,
+            max_earned_income=args.max_earned_income,
+            step=args.step,
+        )
     elif args.mode == "regions":
         output = calculate_region_comparison(payload)
     else:

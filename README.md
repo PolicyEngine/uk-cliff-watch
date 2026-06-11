@@ -8,12 +8,12 @@ Dynamic benefit-cliff and marginal-rate explorer for UK households, built on Pol
 
 ## What this shows
 
-- **Net income as gross earnings rise** — traces `household_net_income` from £0 up to £80,000 gross per year so you can see exactly how much a household keeps at every point on the earnings curve.
+- **Net income as gross earnings rise** — traces `household_net_income` from £0 up to £135,000 gross per year so you can see exactly how much a household keeps at every point on the earnings curve.
 - **Benefit cliffs** — points where net income drops sharply as earnings cross a threshold (e.g. the Tax-Free Childcare hard cliff, the High-Income Child Benefit Charge entry point).
 - **Effective marginal tax rates (EMTRs)** — the fraction of the next £1,000 of gross earnings lost to tax rises or benefit withdrawal; the Universal Credit 55% taper stacking on top of income tax and National Insurance creates combined rates above 70% for many working families; the £100k–£125,140 band produces a 60% EMTR through the personal-allowance taper.
 - **Program-level breakdown** of every modelled component:
-  - Benefits: Universal Credit, Child Benefit, Child Tax Credit, Working Tax Credit, Housing Benefit, Council Tax Reduction, Pension Credit, Tax-Free Childcare, Free School Meals.
-  - Taxes: Income Tax, National Insurance, Council Tax.
+  - Benefits: Universal Credit, Child Benefit, Child Tax Credit, Working Tax Credit, Housing Benefit, Pension Credit, Tax-Free Childcare, free childcare hours, Carer's Allowance, UC carer element.
+  - Taxes and repayments: Income Tax, National Insurance, Council Tax, Student Loan Repayment.
 - **Regional comparison** — runs the same household across all 12 UK ITL-1 regions (North East, North West, Yorkshire and the Humber, East Midlands, West Midlands, East of England, London, South East, South West, Wales, Scotland, Northern Ireland) so you can see how Council Tax and locally-administered benefit rates shift the curve.
 - **Household-type comparison** — side-by-side view across four canonical templates: single adult (no children), lone parent with 2 children, couple with 2 children, couple with no children.
 
@@ -94,7 +94,7 @@ npm install
 NEXT_PUBLIC_API_ORIGIN=http://127.0.0.1:8000 npm run dev
 ```
 
-The frontend reads `NEXT_PUBLIC_API_ORIGIN` for all API calls. In production on Vercel the API handlers are co-located, so no environment variable is needed.
+The Next dev server proxies `/api/*` to `NEXT_PUBLIC_API_ORIGIN` (or `CLIFF_WATCH_DEV_API_ORIGIN`) and defaults to `http://127.0.0.1:8000`. In production on Vercel the API handlers are co-located, so no environment variable is needed.
 
 ---
 
@@ -106,7 +106,7 @@ All endpoints are CORS-open and return `application/json`.
 |---|---|---|
 | `GET` | `/api/metadata` | Returns country, currency, year, region list, household templates, program definitions, defaults. No request body. |
 | `POST` | `/api/calculate` | Single-point household calculation + cliff/EMTR at `earned_income`. |
-| `POST` | `/api/series` | Full earnings curve from £0 to `max_earned_income` (default £80,000). Accepts optional `max_earned_income` and `step` (default £500) in the body alongside the household payload. |
+| `POST` | `/api/series` | Full earnings curve from `min_earned_income` (default £0) to `max_earned_income` (default £135,000). Accepts optional `min_earned_income`, `max_earned_income`, and `step` (default £500) in the body alongside the household payload. |
 | `POST` | `/api/regions` | Runs the household at `earned_income` across all 12 UK regions. |
 | `POST` | `/api/households` | Runs all four canonical household templates at `earned_income` in the given region. |
 
@@ -134,8 +134,8 @@ Responses are JSON objects whose shape is documented in `uk_cliff_watch/calculat
 
 ## Modelled scope and caveats
 
-- **v1 models** the main means-tested benefits (Universal Credit, Child Benefit, Child/Working Tax Credit, Housing Benefit, Pension Credit, Tax-Free Childcare, free childcare hours) and the main direct taxes (Income Tax, National Insurance, Council Tax).
-- **Disability benefits** (DLA, PIP, Carer's Allowance, ESA) are not yet modelled.
+- **v1 models** the main means-tested benefits (Universal Credit, Child Benefit, Child/Working Tax Credit, Housing Benefit, Pension Credit, Tax-Free Childcare, free childcare hours), Carer's Allowance and the UC carer element, and the main direct taxes and repayments (Income Tax, National Insurance, Council Tax, Student Loan Repayment).
+- **Disability benefits** (DLA, PIP, ESA) are not yet modelled.
 - **Childcare cliffs** are modelled via Tax-Free Childcare and the 15/30-hours free childcare entitlement; both are withdrawn entirely above £100k gross income.
 - All figures are modelled estimates for **tax year 2026**, computed by PolicyEngine UK version ≥ 2.88.0. They are not financial or legal advice.
 
