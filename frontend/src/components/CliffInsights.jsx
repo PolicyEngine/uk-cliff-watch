@@ -64,7 +64,6 @@ function CliffInsights({ data, stepAnnual }) {
   const worstLossRateCliff = report.worstLossRateCliff
   const firstCliff = report.firstCliff
   const dominantDriver = report.dominantDrivers[0]
-  const biggestDropDriver = largestCliff.material_cliff_drivers?.[0] || null
   const overview = `The first meaningful cliff band begins around ${formatCurrency(firstCliff.startIncomeAnnual)}/yr in earnings. The biggest single-step drop is ${formatCurrency(largestCliff.dropAnnual)}/yr at ${formatCurrency(largestCliff.endIncomeAnnual)}/yr, driven mostly by ${describeDrivers(largestCliff.material_cliff_drivers || report.dominantDrivers)}.`
 
   return (
@@ -116,11 +115,9 @@ function CliffInsights({ data, stepAnnual }) {
           label="Largest recurring driver"
           value={dominantDriver?.label || 'Mixed losses'}
           detail={
-            biggestDropDriver
-              ? `${biggestDropDriver.label} drives ${formatCurrency(Math.abs(biggestDropDriver.resource_effect_annual))}/yr of the biggest drop`
-              : dominantDriver
-                ? `${formatCurrency(dominantDriver.totalImpactAnnual)}/yr across the reported cliffs`
-                : `${report.zones.length} earnings band${report.zones.length === 1 ? '' : 's'} to watch`
+            dominantDriver
+              ? `${formatCurrency(dominantDriver.totalImpactAnnual)}/yr lost across ${dominantDriver.occurrences} cliff step${dominantDriver.occurrences === 1 ? '' : 's'}`
+              : `${report.zones.length} earnings band${report.zones.length === 1 ? '' : 's'} to watch`
           }
         />
       </div>

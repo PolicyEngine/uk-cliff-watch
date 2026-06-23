@@ -144,7 +144,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
   const addPerson = (kind) => {
     if (kind === 'adult' && adultCount >= maxAdults) return
     if (kind === 'child' && dependentCount >= maxDependents) return
-    setPeople([...people, { kind, age: kind === 'adult' ? 30 : '' }])
+    setPeople([...people, { kind, age: kind === 'adult' ? 30 : 10 }])
   }
 
   const removePerson = (index) => {
@@ -284,11 +284,11 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
             household step by step.
           </p>
         </div>
-        <div className="wizard-option-grid">
+        <div className="wizard-option-grid wizard-option-grid--gate">
           <WizardOptionCard
             selected={false}
             title="Quick start"
-            description="Pick a ready-made cliff scenario — a point where net income falls as pay rises. You can still tweak any detail before calculating."
+            description="Pick a ready-made example — a point where net income falls as pay rises. You can still tweak any detail before calculating."
             onClick={() => setMode('quick')}
           />
           <WizardOptionCard
@@ -331,9 +331,6 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                 title={preset.description}
               >
                 <span>{preset.label}</span>
-                <span className="wizard-quickstart-kind wizard-quickstart-kind--cliff">
-                  cliff
-                </span>
               </button>
             ))}
           </div>
@@ -392,12 +389,6 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                     <option key={region.code} value={region.code}>{region.name}</option>
                   ))}
                 </select>
-                {selectedRegion ? (
-                  <div className="zip-state-result" role="status" aria-live="polite">
-                    <span>Region</span>
-                    <strong>{selectedRegion.name}</strong>
-                  </div>
-                ) : null}
               </div>
             </div>
           </section>
@@ -489,10 +480,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                         />
                         <span>Pregnant</span>
                       </label>
-                      <label
-                        className="member-checkbox-label member-checkbox-label--compact"
-                        title="Providing 35+ hours of unpaid care per week — qualifies for Carer's Allowance (~£4,331/yr) but loses it entirely if earnings exceed £196/wk (a hard cliff)."
-                      >
+                      <label className="member-checkbox-label member-checkbox-label--compact">
                         <input
                           type="checkbox"
                           checked={Boolean(person.is_carer)}
@@ -503,7 +491,8 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                             })
                           }
                         />
-                        <span>Carer (35+ hrs/wk)</span>
+                        <span>Unpaid carer</span>
+                        <InfoTooltip text="Tick this if the adult provides 35+ hours a week of unpaid care for someone with a disability. They can claim Carer's Allowance (~£4,331/yr), but lose all of it the moment earnings pass £196/wk — a hard cliff this tool can show." />
                       </label>
                       <PersonFlagGrid
                         person={person}
@@ -534,7 +523,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                 <WizardOptionCard
                   selected={false}
                   title="Add a dependent"
-                  description="Start with a blank age, then add disability, blind, or care needs if relevant."
+                  description="Starts at age 10 — adjust it, then add disability, blind, or care needs if relevant."
                   onClick={() => addPerson('child')}
                 />
               </div>

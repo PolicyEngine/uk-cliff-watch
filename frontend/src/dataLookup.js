@@ -187,10 +187,14 @@ export function createInitialInputs(metadata) {
   return reconcileInputs({
     region: defaults.region || '',
     people: normalizePeople(defaultPeople, metadata),
-    rent_annual: defaults.rent_annual || 0,
+    // Don't silently assume the household rents. A user who never opens the
+    // housing panel and just runs cliffs would otherwise get results baked on
+    // an unseen rent figure. Start as owner / no rent; presets and shared URLs
+    // still set their own rent explicitly.
+    rent_annual: 0,
     childcare_expenses_annual: 0,
     council_tax_band: defaults.council_tax_band || DEFAULT_COUNCIL_TAX_BAND,
-    is_renting: true,
+    is_renting: false,
     student_loan_plan: 'NONE',
     chart_max_earned_income:
       defaults.chart_max_earned_income
