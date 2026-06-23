@@ -13,6 +13,11 @@ import {
 import { decodeInputs, syncUrlToInputs } from './utils/urlState'
 import { refineCliffZones } from './utils/seriesRefine'
 
+// Capture the URL query exactly as the page was loaded, before any
+// syncUrlToInputs() rewrite. Otherwise the app's own round-tripped state would
+// be misread as a shared/deep link (e.g. under React's dev double-invoke).
+const INITIAL_SEARCH = typeof window !== 'undefined' ? window.location.search : ''
+
 function cleanSeriesErrorMessage(error) {
   const message = error?.message?.trim()
   if (!message) {
@@ -33,6 +38,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [seriesLoading, setSeriesLoading] = useState(false)
   const [hasCalculated, setHasCalculated] = useState(false)
+  const [deepLinked, setDeepLinked] = useState(false)
   const [error, setError] = useState(null)
   const [seriesError, setSeriesError] = useState(null)
   const resultsRef = useRef(null)
@@ -44,9 +50,7 @@ function App() {
     loadMetadata()
       .then((meta) => {
         setMetadata(meta)
-        const fromUrl = typeof window !== 'undefined'
-          ? decodeInputs(window.location.search)
-          : null
+        const fromUrl = decodeInputs(INITIAL_SEARCH)
         const initial = createInitialInputs(meta)
         if (fromUrl) {
           // Merge URL-decoded fields over the metadata defaults
@@ -55,6 +59,8 @@ function App() {
           setInputs(seeded)
           syncUrlToInputs(seeded)
           autoCalculateRef.current = seeded
+          // Shared link: skip the quick-start / manual gate and show the wizard.
+          setDeepLinked(true)
         } else {
           setInputs(initial)
         }
@@ -205,6 +211,7 @@ function App() {
           onCalculate={handleCalculate}
           onInputsChange={handleInputsChange}
           onReset={handleReset}
+          deepLinked={deepLinked}
         />
 
         <div ref={resultsRef} />

@@ -1575,8 +1575,10 @@ body {
 }
 
 .cliff-resolution-note {
-  max-width: 18rem;
-  text-align: right;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--color-text-muted);
 }
 
 .cliff-overview,
@@ -2193,11 +2195,6 @@ body {
     flex-direction: column;
   }
 
-  .cliff-resolution-note {
-    max-width: none;
-    text-align: left;
-  }
-
   .cliff-card-grid {
     grid-template-columns: 1fr;
   }
@@ -2407,4 +2404,9 @@ body {
 .wizard-quickstart-kind--household {
   background: #e2e8f0;
   color: #475569;
+}
+.wizard-gate-back {
+  align-self: flex-start;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.74rem;
 }

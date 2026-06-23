@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { hasCompleteRequiredInputs, hasValidAge } from '../dataLookup.js'
 import { WizardOptionCard, WizardProgress } from 'policyengine-household-wizard'
 
@@ -87,8 +87,16 @@ function CurrencyField({ id, label, value, onChange, compact = false, step = 500
   )
 }
 
-function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, onReset }) {
+function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, onReset, deepLinked }) {
   const [currentStepId, setCurrentStepId] = useState('location')
+  // Entry flow: 'gate' (choose quick-start vs manual) → 'quick' (pick a cliff
+  // scenario) or 'wizard' (build step by step). Deep links skip straight to the
+  // wizard so a shared household renders without an extra click.
+  const [mode, setMode] = useState('gate')
+
+  useEffect(() => {
+    if (deepLinked) setMode('wizard')
+  }, [deepLinked])
 
   const people = inputs?.people || []
   const adultCount = people.filter((person) => person.kind === 'adult').length
@@ -99,7 +107,10 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
   const maxAdults = Math.max(1, Number(metadata?.defaults?.max_adults) || 2)
   const maxDependents = Math.max(0, Number(metadata?.defaults?.max_dependents) || 6)
   const regions = metadata?.regions || []
-  const presets = metadata?.presets || []
+  // Quick start only surfaces genuine cliffs — points where net income falls as
+  // gross pay rises. Taper / notch / household-type presets are intentionally
+  // excluded; users who want those build the household manually.
+  const cliffPresets = (metadata?.presets || []).filter((preset) => preset.kind === 'cliff')
   const councilTaxBands = metadata?.council_tax_bands?.length
     ? metadata.council_tax_bands
     : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((code) => ({ code, label: `Band ${code}` }))
@@ -196,6 +207,12 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
       })),
     })
     goToStep('review')
+    setMode('wizard')
+  }
+
+  const startManual = () => {
+    goToStep('location')
+    setMode('wizard')
   }
 
   const adultMembers = people
@@ -241,6 +258,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
   const resetWizard = () => {
     onReset()
     goToStep('location')
+    setMode('gate')
   }
 
   if (!metadata || !inputs) {
@@ -252,25 +270,59 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
     )
   }
 
-  return (
-    <section className="input-panel">
-      <h2>Household information</h2>
-      {presets.length ? (
+  // 'gate' falls through to the wizard if there are no cliff scenarios to offer.
+  const showGate = mode === 'gate' && cliffPresets.length > 0
+  const showQuick = mode === 'quick'
+
+  if (showGate) {
+    return (
+      <section className="input-panel">
+        <div className="wizard-step-heading">
+          <h2>How do you want to start?</h2>
+          <p>
+            Jump straight to a ready-made benefit-cliff example, or build a
+            household step by step.
+          </p>
+        </div>
+        <div className="wizard-option-grid">
+          <WizardOptionCard
+            selected={false}
+            title="Quick start"
+            description="Pick a ready-made cliff scenario — a point where net income falls as pay rises. You can still tweak any detail before calculating."
+            onClick={() => setMode('quick')}
+          />
+          <WizardOptionCard
+            selected={false}
+            title="Build manually"
+            description="Set the region, household, costs and income yourself, step by step."
+            onClick={startManual}
+          />
+        </div>
+      </section>
+    )
+  }
+
+  if (showQuick) {
+    return (
+      <section className="input-panel">
         <div className="wizard-quickstart">
           <div className="wizard-quickstart-heading">
-            <span className="wizard-quickstart-label">Quick start</span>
+            <button
+              type="button"
+              className="reset-btn wizard-gate-back"
+              onClick={() => setMode('gate')}
+            >
+              ← Back
+            </button>
+            <span className="wizard-quickstart-label">Quick start — benefit cliffs</span>
             <p className="wizard-quickstart-copy">
-              You can pick a ready-made example household instead of filling in
-              the steps below — each button jumps straight to the review step,
-              where you can still tweak any detail before calculating. The tag on
-              each button says what it shows: a <strong>cliff</strong> (net income
-              falls as pay rises), a <strong>taper</strong> (a stretch of very
-              high marginal rates), a <strong>notch</strong> (net income jumps up
-              in one step), or a typical <strong>household</strong> type.
+              Each example is a <strong>cliff</strong>: a point where net income
+              falls as gross pay rises. Pick one to jump to the review step, where
+              you can still tweak any detail before calculating.
             </p>
           </div>
           <div className="wizard-quickstart-chips">
-            {presets.map((preset) => (
+            {cliffPresets.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
@@ -279,16 +331,20 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
                 title={preset.description}
               >
                 <span>{preset.label}</span>
-                {preset.kind ? (
-                  <span className={`wizard-quickstart-kind wizard-quickstart-kind--${preset.kind}`}>
-                    {preset.kind}
-                  </span>
-                ) : null}
+                <span className="wizard-quickstart-kind wizard-quickstart-kind--cliff">
+                  cliff
+                </span>
               </button>
             ))}
           </div>
         </div>
-      ) : null}
+      </section>
+    )
+  }
+
+  return (
+    <section className="input-panel">
+      <h2>Household information</h2>
       <WizardProgress
         totalSteps={WIZARD_STEPS.length}
         currentStepIndex={currentStepIndex}
@@ -296,6 +352,14 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
         aria-label="Household setup progress"
       />
       <form
+        // Rely on the wizard's own JS validation (disabled buttons +
+        // hasCompleteRequiredInputs) rather than native HTML5 validation. The
+        // currency `step` attributes are only meant to size the arrow-key nudge;
+        // without noValidate they also *reject* real-world amounts (e.g. £7,200
+        // rent with step 500), and when such a field sits inside a collapsed
+        // <details> the browser can't focus it to report the error, so submit
+        // fails silently and "Find cliffs" appears to do nothing.
+        noValidate
         onSubmit={(event) => {
           event.preventDefault()
           if (!currentStepComplete) return
@@ -561,7 +625,7 @@ function InputPanel({ metadata, inputs, loading, onCalculate, onInputsChange, on
               </button>
             </div>
 
-            <details className="advanced-panel" open>
+            <details className="advanced-panel">
               <summary className="advanced-summary">Housing, childcare &amp; chart range</summary>
               <div className="advanced-grid">
                 <section className="advanced-section">

@@ -41,12 +41,12 @@ function CliffInsights({ data, stepAnnual }) {
             <p className="chart-subtitle">
               Cliff bands show the sampled earnings range where a loss appears. For example, a {formatCurrency(stepAnnual || 500)}/yr band means the household still has the program at the lower value and loses it by the upper value.
             </p>
+            {stepAnnual ? (
+              <p className="chart-subtitle cliff-resolution-note">
+                Calculated in {formatCurrency(stepAnnual)}/year increments.
+              </p>
+            ) : null}
           </div>
-          {stepAnnual ? (
-            <p className="chart-subtitle cliff-resolution-note">
-              Calculated in {formatCurrency(stepAnnual)}/year increments.
-            </p>
-          ) : null}
         </div>
         <div className="cliff-empty-panel">
           <strong>No cliffs detected at this resolution.</strong>
@@ -78,12 +78,12 @@ function CliffInsights({ data, stepAnnual }) {
           <p className="chart-subtitle">
             Cliff bands show the sampled earnings range where a loss appears. For example, a {formatCurrency(stepAnnual || 500)}/yr band means the household still has the program at the lower value and loses it by the upper value.
           </p>
+          {stepAnnual ? (
+            <p className="chart-subtitle cliff-resolution-note">
+              Calculated in {formatCurrency(stepAnnual)}/year increments.
+            </p>
+          ) : null}
         </div>
-        {stepAnnual ? (
-          <p className="chart-subtitle cliff-resolution-note">
-            Calculated in {formatCurrency(stepAnnual)}/year increments.
-          </p>
-        ) : null}
       </div>
 
       <p className="cliff-overview">

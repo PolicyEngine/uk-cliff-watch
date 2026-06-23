@@ -454,7 +454,8 @@ function BenefitChart({
       .filter(Boolean)
   }, [annualizedData, cliffReport.zones])
 
-  const { xTicks, netYTicks, detailYTicks, detailDomain } = useMemo(() => {
+  const { xTicks, netYTicks, detailYTicks, detailDomain, mtrYTicks, mtrDomain } = useMemo(() => {
+    const placeholderMtrTicks = signedNiceTicks(0, 1.5)
     if (!annualizedData.length || (!hasRealData && loading)) {
       const placeholderDetailTicks = signedNiceTicks(-20000, Math.max(placeholderMaxEarnedIncome, 50000))
       return {
@@ -465,6 +466,8 @@ function BenefitChart({
           placeholderDetailTicks[0],
           placeholderDetailTicks[placeholderDetailTicks.length - 1],
         ],
+        mtrYTicks: placeholderMtrTicks,
+        mtrDomain: [placeholderMtrTicks[0], placeholderMtrTicks[placeholderMtrTicks.length - 1]],
       }
     }
 
@@ -496,6 +499,21 @@ function BenefitChart({
 
     const computedDetailYTicks = signedNiceTicks(detailMin, detailMax)
 
+    // Marginal-tax-rate axis: derive evenly-spaced, round ticks from the actual
+    // EMTR range (fractions, e.g. 0.55 = 55%) instead of letting Recharts pick
+    // irregular auto-ticks. Floor the range at 0%–150% so a flat series still
+    // gets a sensible axis.
+    let mtrMin = 0
+    let mtrMax = 1.5
+    annualizedData.forEach((item) => {
+      const value = Number(item.marginal_tax_rate)
+      if (Number.isFinite(value)) {
+        mtrMin = Math.min(mtrMin, value)
+        mtrMax = Math.max(mtrMax, value)
+      }
+    })
+    const computedMtrYTicks = signedNiceTicks(mtrMin, mtrMax)
+
     return {
       xTicks: cappedXTicks(xMax),
       netYTicks: niceTicks(netYMax),
@@ -503,6 +521,11 @@ function BenefitChart({
       detailDomain: [
         computedDetailYTicks[0],
         computedDetailYTicks[computedDetailYTicks.length - 1],
+      ],
+      mtrYTicks: computedMtrYTicks,
+      mtrDomain: [
+        computedMtrYTicks[0],
+        computedMtrYTicks[computedMtrYTicks.length - 1],
       ],
     }
   }, [annualizedData, hasRealData, loading, placeholderMaxEarnedIncome, visibleDetailAreaSeries, visibleDetailLineSeries, visibleNetSeries])
@@ -856,10 +879,8 @@ function BenefitChart({
               <YAxis
                 yAxisId="mtr"
                 orientation="right"
-                domain={[
-                  (dataMin) => Math.min(0, dataMin),
-                  (dataMax) => Math.max(1.5, dataMax),
-                ]}
+                domain={mtrDomain}
+                ticks={mtrYTicks}
                 tickFormatter={(value) => `${Math.round(value * 100)}%`}
                 label={{
                   value: 'Marginal tax rate',
