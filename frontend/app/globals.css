@@ -1,3 +1,11 @@
 @import "tailwindcss";
 @import "@policyengine/ui-kit/theme.css";
 @import "../src/App.css";
+
+/* When embedded in an iframe (data-pe-embedded set pre-paint in layout.jsx),
+   hide the PolicyEngine site header and footer — the host page (e.g. the
+   policyengine.org apps grid) supplies its own, so showing ours duplicates them. */
+html[data-pe-embedded] .cliffwatch-pe-header,
+html[data-pe-embedded] .cliffwatch-pe-footer {
+  display: none !important;
+}

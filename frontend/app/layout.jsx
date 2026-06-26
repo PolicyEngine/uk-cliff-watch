@@ -144,13 +144,27 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en-GB">
       <head>
+        {/* Hide the PolicyEngine site header/footer when this app is embedded
+            in an iframe (e.g. the policyengine.org apps grid), since the host
+            page supplies its own. Runs before paint to avoid a flash; a
+            cross-origin window.top access throws, which itself means embedded. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(window.self!==window.top||new URLSearchParams(window.location.search).has('embedded')){document.documentElement.setAttribute('data-pe-embedded','')}}catch(e){document.documentElement.setAttribute('data-pe-embedded','')}",
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
       <body className={inter.className}>
-        <PolicyEngineShell country="uk">
+        <PolicyEngineShell
+          country="uk"
+          headerProps={{ className: "cliffwatch-pe-header" }}
+          footerProps={{ className: "cliffwatch-pe-footer" }}
+        >
           {children}
         </PolicyEngineShell>
       </body>
