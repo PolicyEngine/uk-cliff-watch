@@ -39,6 +39,10 @@ const CHART_MODE_OPTIONS = [
     key: 'program_detail',
     label: 'Program detail',
   },
+  {
+    key: 'marginal_rate',
+    label: 'Marginal rate',
+  },
 ]
 
 const NET_VIEW_SERIES = [
@@ -241,7 +245,6 @@ function BenefitChart({
   const [detailVisibleKeys, setDetailVisibleKeys] = useState({})
   const [showCliffHighlights, setShowCliffHighlights] = useState(true)
   const [showNotchHighlights, setShowNotchHighlights] = useState(true)
-  const [showMtr, setShowMtr] = useState(true)
   const hasRealData = Boolean(data?.length)
   const householdCostDefinitions = useMemo(
     () => getHouseholdCostDefinitions(metadata),
@@ -622,12 +625,6 @@ function BenefitChart({
               <span>{fmt(point.net_change_annual_display)}/yr</span>
             </div>
           ) : null}
-          {showMtr && point.marginal_tax_rate !== null && point.marginal_tax_rate !== undefined ? (
-            <div className="chart-tooltip-row">
-              <span>Marginal tax rate</span>
-              <span>{fmtMtr(point.marginal_tax_rate)}</span>
-            </div>
-          ) : null}
         </div>
         {tooltipCliff?.drivers?.length ? (
           <div className="chart-tooltip-divider">
@@ -675,12 +672,6 @@ function BenefitChart({
               <span>{fmt(point[series.key] || 0)}/yr</span>
             </div>
           ))}
-          {showMtr && point.marginal_tax_rate !== null && point.marginal_tax_rate !== undefined ? (
-            <div className="chart-tooltip-row">
-              <span>Marginal tax rate</span>
-              <span>{fmtMtr(point.marginal_tax_rate)}</span>
-            </div>
-          ) : null}
         </div>
         {tooltipCliff?.drivers?.length ? (
           <div className="chart-tooltip-divider">
@@ -702,9 +693,52 @@ function BenefitChart({
     )
   }
 
+  const MtrTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) {
+      return null
+    }
+
+    const point = payload[0].payload
+    const mtr = point.marginal_tax_rate
+    const hasMtr = mtr !== null && mtr !== undefined && Number.isFinite(Number(mtr))
+
+    return (
+      <div className="chart-tooltip">
+        <p className="chart-tooltip-kicker">Earnings: {fmt(label)}/yr</p>
+        <p className="chart-tooltip-highlight">Marginal tax rate: {hasMtr ? fmtMtr(mtr) : '—'}</p>
+        <div className="chart-tooltip-divider">
+          {hasMtr ? (
+            <div className="chart-tooltip-row">
+              <span>Kept from last £ earned</span>
+              <span>{fmtMtr(1 - Number(mtr))}</span>
+            </div>
+          ) : null}
+          <div className="chart-tooltip-row">
+            <span>Net income</span>
+            <span>{fmt(point.net_resources_annual)}/yr</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const legendSeries = chartMode === 'net_income'
     ? NET_VIEW_SERIES
-    : detailLegendSeries
+    : chartMode === 'program_detail'
+      ? detailLegendSeries
+      : []
+
+  const chartTitle = chartMode === 'net_income'
+    ? 'Net income over earnings'
+    : chartMode === 'program_detail'
+      ? 'Program detail over earnings'
+      : 'Marginal tax rate over earnings'
+
+  const chartDescription = chartMode === 'net_income'
+    ? 'Track how annual net income changes as earnings rise, with earnings dead zones shaded and cliff markers anchored to the last sampled income before a drop.'
+    : chartMode === 'program_detail'
+      ? 'Turn programmes on and off to see earnings and supports above zero, household costs and taxes below zero, and the black line showing final annual net income.'
+      : 'See how much of each extra pound earned is lost to tax and withdrawn support. Spikes above 100% mark cliffs where earning more leaves the household worse off.'
 
   const wrapperClassName = [
     'chart-wrapper',
@@ -716,12 +750,8 @@ function BenefitChart({
     <div className={wrapperClassName}>
       <div className="chart-panel-header">
         <div>
-          <h4>{chartMode === 'net_income' ? 'Net income over earnings' : 'Program detail over earnings'}</h4>
-          <p>
-            {chartMode === 'net_income'
-              ? 'Track how annual net income changes as earnings rise, with earnings dead zones shaded and cliff markers anchored to the last sampled income before a drop.'
-              : 'Turn programmes on and off to see earnings and supports above zero, household costs and taxes below zero, and the black line showing final annual net income.'}
-          </p>
+          <h4>{chartTitle}</h4>
+          <p>{chartDescription}</p>
         </div>
         <div className="chart-view-toggle" role="tablist" aria-label="Chart view">
           {CHART_MODE_OPTIONS.map((option) => {
@@ -773,7 +803,7 @@ function BenefitChart({
             </button>
           )
         })}
-        {highlightedCliffs.length ? (
+        {chartMode !== 'marginal_rate' && highlightedCliffs.length ? (
           <button
             type="button"
             className={`chart-toggle ${showCliffHighlights ? 'active' : ''}`}
@@ -792,7 +822,7 @@ function BenefitChart({
             <span>Cliff highlights</span>
           </button>
         ) : null}
-        {notchPoints.length ? (
+        {chartMode !== 'marginal_rate' && notchPoints.length ? (
           <button
             type="button"
             className={`chart-toggle ${showNotchHighlights ? 'active' : ''}`}
@@ -811,23 +841,23 @@ function BenefitChart({
             <span>Notch (benefit-cap exemption)</span>
           </button>
         ) : null}
-        <button
-          type="button"
-          className={`chart-toggle ${showMtr ? 'active' : ''}`}
-          onClick={() => setShowMtr((current) => !current)}
-          style={{
-            '--legend-stroke': MTR_COLOR,
-          }}
-        >
+        {chartMode === 'marginal_rate' ? (
           <span
-            className="chart-legend-swatch chart-legend-swatch--line"
+            className="chart-toggle active"
             style={{
               '--legend-stroke': MTR_COLOR,
-              '--legend-fill': 'transparent',
             }}
-          />
-          <span>Marginal tax rate</span>
-        </button>
+          >
+            <span
+              className="chart-legend-swatch chart-legend-swatch--line"
+              style={{
+                '--legend-stroke': MTR_COLOR,
+                '--legend-fill': 'transparent',
+              }}
+            />
+            <span>Marginal tax rate</span>
+          </span>
+        ) : null}
       </div>
 
       <div className="chart-canvas">
@@ -861,40 +891,39 @@ function BenefitChart({
               yAxisId="left"
               domain={chartMode === 'net_income'
                 ? [0, netYTicks[netYTicks.length - 1]]
-                : detailDomain}
-              ticks={chartMode === 'net_income' ? netYTicks : detailYTicks}
-              tickFormatter={fmt}
+                : chartMode === 'program_detail'
+                  ? detailDomain
+                  : mtrDomain}
+              ticks={chartMode === 'net_income'
+                ? netYTicks
+                : chartMode === 'program_detail'
+                  ? detailYTicks
+                  : mtrYTicks}
+              tickFormatter={chartMode === 'marginal_rate'
+                ? (value) => `${Math.round(value * 100)}%`
+                : fmt}
               label={{
-                value: 'Annual amount (£)',
+                value: chartMode === 'marginal_rate' ? 'Marginal tax rate' : 'Annual amount (£)',
                 angle: -90,
                 position: 'insideLeft',
                 dx: -5,
-                style: { textAnchor: 'middle', fill: '#6b7280', fontSize: 11 },
+                style: {
+                  textAnchor: 'middle',
+                  fill: chartMode === 'marginal_rate' ? MTR_COLOR : '#6b7280',
+                  fontSize: 11,
+                },
               }}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: chartMode === 'marginal_rate' ? MTR_COLOR : '#6b7280', fontSize: 11 }}
               axisLine={{ stroke: '#e5e2dd' }}
               tickLine={{ stroke: '#e5e2dd' }}
             />
-            {showMtr ? (
-              <YAxis
-                yAxisId="mtr"
-                orientation="right"
-                domain={mtrDomain}
-                ticks={mtrYTicks}
-                tickFormatter={(value) => `${Math.round(value * 100)}%`}
-                label={{
-                  value: 'Marginal tax rate',
-                  angle: 90,
-                  position: 'insideRight',
-                  dx: 10,
-                  style: { textAnchor: 'middle', fill: MTR_COLOR, fontSize: 11 },
-                }}
-                tick={{ fill: MTR_COLOR, fontSize: 11 }}
-                axisLine={{ stroke: '#e5e2dd' }}
-                tickLine={{ stroke: '#e5e2dd' }}
-              />
-            ) : null}
-            <Tooltip content={chartMode === 'net_income' ? <NetTooltip /> : <DetailTooltip />} />
+            <Tooltip
+              content={chartMode === 'net_income'
+                ? <NetTooltip />
+                : chartMode === 'program_detail'
+                  ? <DetailTooltip />
+                  : <MtrTooltip />}
+            />
             <ReferenceLine
               yAxisId="left"
               y={0}
@@ -982,24 +1011,23 @@ function BenefitChart({
               ))
               : null}
 
-            {showMtr ? (
+            {chartMode === 'marginal_rate' ? (
               <Line
-                yAxisId="mtr"
+                yAxisId="left"
                 type="monotone"
                 dataKey="marginal_tax_rate"
                 stroke={MTR_COLOR}
-                strokeWidth={2}
-                strokeDasharray="5 3"
+                strokeWidth={2.4}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 dot={false}
                 connectNulls={false}
                 isAnimationActive={false}
-                activeDot={{ r: 4, fill: MTR_COLOR, stroke: '#ffffff', strokeWidth: 2 }}
+                activeDot={{ r: 5, fill: MTR_COLOR, stroke: '#ffffff', strokeWidth: 2 }}
               />
             ) : null}
 
-            {showCliffHighlights
+            {showCliffHighlights && chartMode !== 'marginal_rate'
               ? highlightedCliffs.map((cliff) => {
                 const style = CLIFF_HIGHLIGHT_STYLES[cliff.severity?.tone] || CLIFF_HIGHLIGHT_STYLES.moderate
                 return (
