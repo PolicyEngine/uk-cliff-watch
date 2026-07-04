@@ -1,7 +1,7 @@
 const isDev = process.env.NODE_ENV === "development";
 const defaultBasePath = isDev || process.env.VERCEL_ENV === "preview"
   ? ""
-  : "/uk/cliff-watch";
+  : "/uk/uk-cliff-watch";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH !== undefined
   ? process.env.NEXT_PUBLIC_BASE_PATH
