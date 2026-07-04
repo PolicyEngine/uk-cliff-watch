@@ -7,7 +7,9 @@
     { "source": "/", "destination": "/uk/uk-cliff-watch", "permanent": false }
   ],
   "rewrites": [
-    { "source": "/uk/uk-cliff-watch/api/:path*", "destination": "/api/:path*" }
+    { "source": "/uk/uk-cliff-watch/api/:path*", "destination": "/api/:path*" },
+    { "source": "/uk/uk-cliff-watch", "destination": "/index.html" },
+    { "source": "/uk/uk-cliff-watch/:path*", "destination": "/:path*" }
   ],
   "functions": {
     "api/calculate.py":  { "maxDuration": 60 },
