@@ -4,6 +4,7 @@ import "policyengine-household-wizard/styles.css";
 
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Script from "next/script";
 const inter = Inter({ subsets: ["latin"] });
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -167,6 +168,23 @@ export default function RootLayout({ children }) {
         >
           {children}
         </PolicyEngineShell>
+        {/* Google Analytics: policyengine.org's GA4 property; this app is served at
+            policyengine.org/uk/uk-cliff-watch through a rewrite, where the main site's GA
+            does not reach. Page views only. */}
+        {process.env.NODE_ENV === "production" && (
+          <>
+            <Script
+              src="https://www.googletagmanager.com/gtag/js?id=G-2YHG89FY0N"
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-2YHG89FY0N');`}
+            </Script>
+          </>
+        )}
       </body>
     </html>
   );
